@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 
 from plant_classifier.data import limit_records_by_species, load_metadata_csv, sample_pairs
 from plant_classifier.models.siamese import BackboneSpec, build_siamese_network
+from plant_classifier.training.genus_eval import evaluate_genus_retrieval, prepare_genus_eval_records
 from plant_classifier.training.image_pairs import PairImageDataset
 from plant_classifier.training.loop import train_siamese, train_siamese_with_dynamic_pairs
 from plant_classifier.training.validation import validate_records_exist
@@ -61,6 +62,7 @@ def main() -> int:
             momentum=float(config["training"]["momentum"]),
             num_workers=int(config["training"].get("num_workers", 2)),
             seed=int(config["seed"]),
+            eval_fn=_build_eval_fn(config, records, stage),
         )
     else:
         _train_static_pairs(config, records, stage, view, model, args.output)
@@ -114,6 +116,39 @@ def _train_static_pairs(config: dict, records: list, stage: str, view: str, mode
         learning_rate=float(config["training"]["learning_rate"]),
         momentum=float(config["training"]["momentum"]),
     )
+
+
+def _build_eval_fn(config: dict, records: list, stage: str):
+    evaluation_config = config.get("evaluation", {})
+    if stage != "genus" or not evaluation_config.get("enabled", False):
+        return None
+
+    references, queries = prepare_genus_eval_records(
+        records=records,
+        max_species=evaluation_config.get("max_species"),
+        references_per_genus=int(evaluation_config.get("references_per_genus", 2)),
+        queries_per_genus=int(evaluation_config.get("queries_per_genus", 2)),
+    )
+    top_k = int(evaluation_config.get("top_k", 5))
+    image_size = int(config["views"]["global"]["image_size"])
+    crop_size = int(config["views"]["local"]["crop_size"])
+    print(
+        f"genus eval enabled: references={len(references)} "
+        f"queries={len(queries)} top_k={top_k}"
+    )
+
+    def eval_fn(model, device):
+        return evaluate_genus_retrieval(
+            model=model,
+            references=references,
+            queries=queries,
+            image_size=image_size,
+            crop_size=crop_size,
+            top_k=top_k,
+            device=device,
+        )
+
+    return eval_fn
 
 
 if __name__ == "__main__":

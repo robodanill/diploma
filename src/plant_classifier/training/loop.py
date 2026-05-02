@@ -9,6 +9,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 from plant_classifier.data import ImageRecord, sample_pairs
+from plant_classifier.training.genus_eval import GenusEvalResult
 from plant_classifier.training.image_pairs import PairImageDataset
 
 
@@ -79,6 +80,7 @@ def train_siamese_with_dynamic_pairs(
     num_workers: int = 2,
     seed: int = 42,
     device: str | None = None,
+    eval_fn=None,
 ) -> TrainResult:
     """Train a Siamese model while re-sampling positive/negative pairs every epoch."""
 
@@ -95,6 +97,7 @@ def train_siamese_with_dynamic_pairs(
 
     last_loss = 0.0
     best_loss = float("inf")
+    best_eval = -1.0
 
     for epoch in range(epochs):
         pairs = sample_pairs(
@@ -134,16 +137,54 @@ def train_siamese_with_dynamic_pairs(
 
         last_loss = running_loss / max(1, len(dataloader))
         elapsed = perf_counter() - started_at
-        if last_loss < best_loss:
+        eval_result = eval_fn(model, resolved_device) if eval_fn is not None else None
+        is_best = _is_best(last_loss, eval_result, best_loss, best_eval)
+        if is_best:
             best_loss = last_loss
+            if eval_result is not None:
+                best_eval = eval_result.accuracy
             torch.save(model.state_dict(), best_checkpoint_path)
             best_marker = " best"
         else:
             best_marker = ""
-        print(
-            f"epoch={epoch + 1} loss={last_loss:.4f} "
-            f"best_loss={best_loss:.4f} time={elapsed:.1f}s{best_marker}"
-        )
+        print(_format_epoch(epoch, last_loss, best_loss, elapsed, eval_result, best_eval, best_marker))
 
     torch.save(model.state_dict(), checkpoint_path)
     return TrainResult(checkpoint_path=checkpoint_path, last_loss=last_loss)
+
+
+def _is_best(
+    loss: float,
+    eval_result: GenusEvalResult | None,
+    best_loss: float,
+    best_eval: float,
+) -> bool:
+    if eval_result is not None:
+        return eval_result.accuracy > best_eval
+    return loss < best_loss
+
+
+def _format_epoch(
+    epoch: int,
+    loss: float,
+    best_loss: float,
+    elapsed: float,
+    eval_result: GenusEvalResult | None,
+    best_eval: float,
+    best_marker: str,
+) -> str:
+    parts = [
+        f"epoch={epoch + 1}",
+        f"loss={loss:.4f}",
+        f"best_loss={best_loss:.4f}",
+    ]
+    if eval_result is not None:
+        parts.extend(
+            [
+                f"top{eval_result.top_k}_genus_accuracy={eval_result.accuracy:.3f}",
+                f"best_top{eval_result.top_k}={best_eval:.3f}",
+                f"eval={eval_result.hits}/{eval_result.queries}",
+            ]
+        )
+    parts.append(f"time={elapsed:.1f}s{best_marker}")
+    return " ".join(parts)

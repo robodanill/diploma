@@ -42,6 +42,13 @@ training:
   lr_decay_step: 512
   lr_decay_gamma: 0.5
 
+evaluation:
+  enabled: true
+  max_species: 120
+  references_per_genus: 2
+  queries_per_genus: 2
+  top_k: 5
+
 inference:
   references_per_class: 6
   genus_candidates: 30

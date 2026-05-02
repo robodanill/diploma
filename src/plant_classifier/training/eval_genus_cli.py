@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import argparse
-from collections import Counter, defaultdict
 from pathlib import Path
 
 import torch
 import yaml
-from PIL import Image
 
 from plant_classifier.data import ImageRecord, limit_records_by_species, load_metadata_csv
 from plant_classifier.models.siamese import BackboneSpec, build_siamese_network
-from plant_classifier.training.image_pairs import build_image_transform
+from plant_classifier.training.genus_eval import (
+    describe_genus_distribution,
+    evaluate_genus_retrieval,
+    split_references_and_queries,
+)
 
 
 def main() -> int:
@@ -34,7 +36,7 @@ def main() -> int:
             max_images_per_species=args.references_per_genus + args.queries_per_genus,
         )
 
-    references, queries = _split_references_and_queries(
+    references, queries = split_references_and_queries(
         records,
         references_per_genus=args.references_per_genus,
         queries_per_genus=args.queries_per_genus,
@@ -50,31 +52,20 @@ def main() -> int:
     model.load_state_dict(torch.load(args.checkpoint, map_location=device))
     model.eval()
 
-    transform = build_image_transform(
-        "global",
+    result = evaluate_genus_retrieval(
+        model=model,
+        references=references,
+        queries=queries,
         image_size=int(config["views"]["global"]["image_size"]),
         crop_size=int(config["views"]["local"]["crop_size"]),
+        top_k=args.top_k,
+        device=device,
     )
 
-    with torch.inference_mode():
-        reference_embeddings = [
-            (record, _embed(model, record.image_path, transform, device)) for record in references
-        ]
-
-        hits = 0
-        for query in queries:
-            query_embedding = _embed(model, query.image_path, transform, device)
-            ranked = _rank_references(model, query_embedding, reference_embeddings)
-            top_genera = [record.genus for record, _ in ranked[: args.top_k]]
-            if query.genus in top_genera:
-                hits += 1
-
-        accuracy = hits / len(queries)
-
-    print(f"references={len(references)} queries={len(queries)} top_k={args.top_k}")
-    print(f"top{args.top_k}_genus_accuracy={accuracy:.3f} ({hits}/{len(queries)})")
-    print("query genus distribution:", dict(Counter(record.genus for record in queries).most_common(10)))
-    print("reference genus distribution:", dict(Counter(record.genus for record in references).most_common(10)))
+    print(f"references={result.references} queries={result.queries} top_k={result.top_k}")
+    print(f"top{result.top_k}_genus_accuracy={result.accuracy:.3f} ({result.hits}/{result.queries})")
+    print("query genus distribution:", describe_genus_distribution(queries))
+    print("reference genus distribution:", describe_genus_distribution(references))
     return 0
 
 
@@ -92,42 +83,6 @@ def _load_records(dataset_config: dict) -> list[ImageRecord]:
         genus_column=dataset_config["genus_column"],
         species_column=dataset_config["species_column"],
     )
-
-
-def _split_references_and_queries(
-    records: list[ImageRecord],
-    references_per_genus: int,
-    queries_per_genus: int,
-) -> tuple[list[ImageRecord], list[ImageRecord]]:
-    grouped: dict[str, list[ImageRecord]] = defaultdict(list)
-    for record in sorted(records, key=lambda item: (item.genus, item.species, str(item.image_path))):
-        grouped[record.genus].append(record)
-
-    references: list[ImageRecord] = []
-    queries: list[ImageRecord] = []
-    for genus in sorted(grouped):
-        items = grouped[genus]
-        needed = references_per_genus + queries_per_genus
-        if len(items) < needed:
-            continue
-        references.extend(items[:references_per_genus])
-        queries.extend(items[references_per_genus:needed])
-    return references, queries
-
-
-def _embed(model, image_path: Path, transform, device: torch.device):
-    with Image.open(image_path) as image:
-        tensor = transform(image.convert("RGB")).unsqueeze(0).to(device)
-    return model.embed(tensor)
-
-
-def _rank_references(model, query_embedding, reference_embeddings):
-    ranked = []
-    for record, reference_embedding in reference_embeddings:
-        distance = torch.abs(query_embedding - reference_embedding)
-        score = float(model.comparator(distance).flatten().item())
-        ranked.append((record, score))
-    return sorted(ranked, key=lambda item: item[1], reverse=True)
 
 
 if __name__ == "__main__":
