@@ -112,4 +112,9 @@
   - отдельная вкладка просмотра результата по изображению.
 - Завершено: создан контракт инференса `Predictor` и детерминированная заглушка `StubPredictor`.
 - Проверено: `python3 -m compileall src`, установка `pip install -e .`, headless-инициализация главного окна, вызов `StubPredictor`.
-- Следующее действие: добавить скелет ML-пайплайна для двухэтапной S-CNN и подготовить Colab/notebook для данных PlantCLEF 2015.
+- Завершено: добавлен первый ML-каркас:
+  - `configs/training.yaml` с параметрами двухэтапной S-CNN;
+  - генерация positive/negative пар для `family/genus/species`;
+  - helper для центрального crop локального вида листа.
+- Проверено: `pytest`, `ruff check src tests`.
+- Следующее действие: реализовать PyTorch-модель Siamese CNN, dataset loader и Colab/notebook для PlantCLEF 2015.
