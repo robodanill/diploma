@@ -32,6 +32,7 @@ dev = [
 [project.scripts]
 plant-classifier-app = "plant_classifier.app.main:main"
 plant-classifier-build-index = "plant_classifier.training.build_index_cli:main"
+plant-classifier-eval-genus = "plant_classifier.training.eval_genus_cli:main"
 plant-classifier-prepare-plantclef = "plant_classifier.data.plantclef_cli:main"
 plant-classifier-train = "plant_classifier.training.cli:main"
 
