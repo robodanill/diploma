@@ -1,0 +1,2 @@
+"""PyQt desktop application."""
+

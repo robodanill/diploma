@@ -14,3 +14,4 @@ checkpoints/
 *.pth
 *.onnx
 *.ckpt
+*.egg-info/
