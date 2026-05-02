@@ -123,4 +123,8 @@
   - загрузчик нормализованного `metadata.csv`;
   - PyTorch `SiameseNetwork` с backbone `vgg16/alexnet/googlenet`;
   - `PairImageDataset` и базовый train loop.
-- Следующее действие: сделать построение reference index и реальный двухэтапный inference predictor для подключения к PyQt.
+- Завершено: добавлен контур артефактов инференса:
+  - CLI `plant-classifier-build-index`;
+  - `ReferenceEmbedding`/`reference_index.pt`;
+  - `TwoStageSiamesePredictor` для genus-to-species инференса по двум checkpoint-файлам и reference index.
+- Следующее действие: добавить настройку загрузки реальной модели в PyQt и подготовить конвертацию PlantCLEF metadata в нормализованный CSV.

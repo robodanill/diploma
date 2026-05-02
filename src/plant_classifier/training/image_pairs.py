@@ -22,7 +22,7 @@ class PairImageDataset(Dataset[tuple[Tensor, Tensor, Tensor]]):
     ) -> None:
         self.pairs = pairs
         self.view = view
-        self.transform = _build_transform(view=view, image_size=image_size, crop_size=crop_size)
+        self.transform = build_image_transform(view=view, image_size=image_size, crop_size=crop_size)
 
     def __len__(self) -> int:
         return len(self.pairs)
@@ -40,7 +40,7 @@ def _load_rgb(path: Path) -> Image.Image:
         return image.convert("RGB")
 
 
-def _build_transform(view: str, image_size: int, crop_size: int) -> transforms.Compose:
+def build_image_transform(view: str, image_size: int, crop_size: int) -> transforms.Compose:
     steps: list[object] = []
     if view == "local":
         steps.extend(
@@ -61,4 +61,3 @@ def _build_transform(view: str, image_size: int, crop_size: int) -> transforms.C
         ]
     )
     return transforms.Compose(steps)
-

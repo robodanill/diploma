@@ -1,0 +1,114 @@
+from __future__ import annotations
+
+import argparse
+from collections import defaultdict
+from pathlib import Path
+
+import torch
+import yaml
+
+from plant_classifier.data import ImageRecord, load_metadata_csv
+from plant_classifier.inference.scnn import ReferenceEmbedding, save_reference_index
+from plant_classifier.models.siamese import BackboneSpec, build_siamese_network
+from plant_classifier.training.image_pairs import build_image_transform
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Build reference embeddings for two-stage inference.")
+    parser.add_argument("--config", type=Path, default=Path("configs/training.yaml"))
+    parser.add_argument("--genus-checkpoint", type=Path, required=True)
+    parser.add_argument("--species-checkpoint", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args()
+
+    config = _load_config(args.config)
+    records = _load_records(config)
+    references = _select_references(
+        records=records,
+        references_per_class=int(config["inference"]["references_per_class"]),
+    )
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model_config = config["model"]
+    genus_model = build_siamese_network(
+        BackboneSpec(name=model_config["backbone"], pretrained=False)
+    ).to(device)
+    species_model = build_siamese_network(
+        BackboneSpec(name=model_config["backbone"], pretrained=False)
+    ).to(device)
+    genus_model.load_state_dict(torch.load(args.genus_checkpoint, map_location=device))
+    species_model.load_state_dict(torch.load(args.species_checkpoint, map_location=device))
+    genus_model.eval()
+    species_model.eval()
+
+    global_transform = build_image_transform(
+        "global",
+        image_size=int(config["views"]["global"]["image_size"]),
+        crop_size=int(config["views"]["local"]["crop_size"]),
+    )
+    local_transform = build_image_transform(
+        "local",
+        image_size=int(config["views"]["local"]["image_size"]),
+        crop_size=int(config["views"]["local"]["crop_size"]),
+    )
+
+    embeddings: list[ReferenceEmbedding] = []
+    with torch.inference_mode():
+        for record in references:
+            image = _load_rgb(record.image_path)
+            global_tensor = global_transform(image).unsqueeze(0).to(device)
+            local_tensor = local_transform(image).unsqueeze(0).to(device)
+            embeddings.append(
+                ReferenceEmbedding(
+                    image_path=record.image_path,
+                    family=record.family,
+                    genus=record.genus,
+                    species=record.species,
+                    global_embedding=genus_model.embed(global_tensor).squeeze(0).cpu(),
+                    local_embedding=species_model.embed(local_tensor).squeeze(0).cpu(),
+                )
+            )
+
+    save_reference_index(embeddings, args.output)
+    print(f"saved {len(embeddings)} reference embeddings to {args.output}")
+    return 0
+
+
+def _load_config(path: Path) -> dict:
+    with path.open("r", encoding="utf-8") as file:
+        return yaml.safe_load(file)
+
+
+def _load_records(config: dict) -> list[ImageRecord]:
+    dataset_config = config["dataset"]
+    return load_metadata_csv(
+        metadata_path=Path(dataset_config["metadata"]),
+        dataset_root=Path(dataset_config["root"]),
+        image_column=dataset_config["image_column"],
+        family_column=dataset_config["family_column"],
+        genus_column=dataset_config["genus_column"],
+        species_column=dataset_config["species_column"],
+    )
+
+
+def _select_references(records: list[ImageRecord], references_per_class: int) -> list[ImageRecord]:
+    grouped: dict[str, list[ImageRecord]] = defaultdict(list)
+    for record in records:
+        grouped[record.species].append(record)
+
+    references: list[ImageRecord] = []
+    for species in sorted(grouped):
+        references.extend(sorted(grouped[species], key=lambda item: str(item.image_path))[:references_per_class])
+    return references
+
+
+def _load_rgb(path: Path):
+    from PIL import Image
+
+    with Image.open(path) as image:
+        return image.convert("RGB")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+
