@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from time import perf_counter
 
 import torch
 from torch import nn
@@ -34,6 +35,7 @@ def train_siamese(
     last_loss = 0.0
 
     for epoch in range(epochs):
+        started_at = perf_counter()
         running_loss = 0.0
         for left, right, labels in dataloader:
             left = left.to(resolved_device)
@@ -49,9 +51,9 @@ def train_siamese(
             running_loss += loss.item()
 
         last_loss = running_loss / max(1, len(dataloader))
-        print(f"epoch={epoch + 1} loss={last_loss:.4f}")
+        elapsed = perf_counter() - started_at
+        print(f"epoch={epoch + 1} loss={last_loss:.4f} time={elapsed:.1f}s")
 
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(model.state_dict(), checkpoint_path)
     return TrainResult(checkpoint_path=checkpoint_path, last_loss=last_loss)
-

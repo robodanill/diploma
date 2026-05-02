@@ -10,6 +10,7 @@ from plant_classifier.data import limit_records_by_species, load_metadata_csv, s
 from plant_classifier.models.siamese import BackboneSpec, build_siamese_network
 from plant_classifier.training.image_pairs import PairImageDataset
 from plant_classifier.training.loop import train_siamese
+from plant_classifier.training.validation import validate_records_exist
 
 
 def main() -> int:
@@ -30,6 +31,7 @@ def main() -> int:
         species_column=dataset_config["species_column"],
     )
     records = _apply_subset(records, dataset_config)
+    validate_records_exist(records)
 
     stage = args.stage
     view = "global" if stage == "genus" else "local"

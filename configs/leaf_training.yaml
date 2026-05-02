@@ -1,0 +1,46 @@
+seed: 42
+
+dataset:
+  name: PlantCLEF2015Leaf
+  root: data/plantclef2015/leaf
+  metadata: data/plantclef2015/metadata.csv
+  image_column: image_path
+  family_column: family
+  genus_column: genus
+  species_column: species
+
+views:
+  global:
+    image_size: 224
+  local:
+    image_size: 224
+    crop_size: 32
+    crop_position: center
+
+pair_sampling:
+  positive_per_epoch:
+    genus: 400
+    species: 800
+  negative_per_epoch:
+    genus: 600
+    species: 1200
+
+model:
+  backbone: vgg16
+  pretrained: true
+  embedding_dim: 4096
+  distance: l1
+
+training:
+  batch_size: 32
+  epochs: 20
+  optimizer: sgd
+  learning_rate: 0.001
+  momentum: 0.9
+  lr_decay_step: 512
+  lr_decay_gamma: 0.5
+
+inference:
+  references_per_class: 6
+  genus_candidates: 30
+  top_k: 5
