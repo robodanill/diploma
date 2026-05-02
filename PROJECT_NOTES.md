@@ -140,4 +140,15 @@
   - `https://lab.plantnet.org/LifeCLEF/PlantCLEF2015/TrainingPackage/PlantCLEF2015TrainingData.tar.gz`;
   - размер training archive: 17,664,271,777 bytes (~16.4 GiB).
 - В процессе: скачивание training archive в `data/plantclef2015/raw/PlantCLEF2015TrainingData.tar.gz`.
-- Следующее действие: распаковать архив, проверить фактическую структуру XML/изображений и адаптировать aliases XML-полей при необходимости.
+- Завершено: training archive скачан и распакован:
+  - архив: `data/plantclef2015/raw/PlantCLEF2015TrainingData.tar.gz`;
+  - распаковка: `data/plantclef2015/train`;
+  - файлов `.jpg`: 91,758;
+  - файлов `.xml`: 91,758.
+- Завершено: создан `data/plantclef2015/metadata.csv` для leaf-only обучения:
+  - строк: 13,367;
+  - семейств: 122;
+  - родов: 490;
+  - видов: 899;
+  - split: `train`.
+- Следующее действие: решить, качать ли test package with annotations (~4.2 GiB), либо сначала сделать train/validation split из training package и запустить Colab-обучение.
