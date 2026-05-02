@@ -33,7 +33,9 @@ model:
 
 training:
   batch_size: 32
+  dynamic_pairs: true
   epochs: 20
+  num_workers: 2
   optimizer: sgd
   learning_rate: 0.001
   momentum: 0.9

@@ -33,7 +33,9 @@ model:
 
 training:
   batch_size: 32
+  dynamic_pairs: true
   epochs: 20
+  num_workers: 2
   optimizer: sgd
   learning_rate: 0.001
   momentum: 0.9
@@ -44,4 +46,3 @@ inference:
   references_per_class: 6
   genus_candidates: 30
   top_k: 5
-

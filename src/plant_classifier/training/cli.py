@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from plant_classifier.data import limit_records_by_species, load_metadata_csv, sample_pairs
 from plant_classifier.models.siamese import BackboneSpec, build_siamese_network
 from plant_classifier.training.image_pairs import PairImageDataset
-from plant_classifier.training.loop import train_siamese
+from plant_classifier.training.loop import train_siamese, train_siamese_with_dynamic_pairs
 from plant_classifier.training.validation import validate_records_exist
 
 
@@ -35,26 +35,6 @@ def main() -> int:
 
     stage = args.stage
     view = "global" if stage == "genus" else "local"
-    pairs = sample_pairs(
-        records=records,
-        taxonomic_level=stage,
-        positive_count=int(config["pair_sampling"]["positive_per_epoch"][stage]),
-        negative_count=int(config["pair_sampling"]["negative_per_epoch"][stage]),
-        seed=int(config["seed"]),
-    )
-    dataset = PairImageDataset(
-        pairs=pairs,
-        view=view,
-        image_size=int(config["views"][view]["image_size"]),
-        crop_size=int(config["views"].get("local", {}).get("crop_size", 32)),
-    )
-    dataloader = DataLoader(
-        dataset,
-        batch_size=int(config["training"]["batch_size"]),
-        shuffle=True,
-        num_workers=2,
-    )
-
     model_config = config["model"]
     model = build_siamese_network(
         BackboneSpec(
@@ -63,14 +43,27 @@ def main() -> int:
             embedding_dim=int(model_config["embedding_dim"]),
         )
     )
-    train_siamese(
-        model=model,
-        dataloader=dataloader,
-        checkpoint_path=args.output,
-        epochs=int(config["training"]["epochs"]),
-        learning_rate=float(config["training"]["learning_rate"]),
-        momentum=float(config["training"]["momentum"]),
-    )
+    dynamic_pairs = bool(config["training"].get("dynamic_pairs", True))
+    if dynamic_pairs:
+        train_siamese_with_dynamic_pairs(
+            model=model,
+            records=records,
+            taxonomic_level=stage,
+            view=view,
+            checkpoint_path=args.output,
+            positive_count=int(config["pair_sampling"]["positive_per_epoch"][stage]),
+            negative_count=int(config["pair_sampling"]["negative_per_epoch"][stage]),
+            image_size=int(config["views"][view]["image_size"]),
+            crop_size=int(config["views"].get("local", {}).get("crop_size", 32)),
+            batch_size=int(config["training"]["batch_size"]),
+            epochs=int(config["training"]["epochs"]),
+            learning_rate=float(config["training"]["learning_rate"]),
+            momentum=float(config["training"]["momentum"]),
+            num_workers=int(config["training"].get("num_workers", 2)),
+            seed=int(config["seed"]),
+        )
+    else:
+        _train_static_pairs(config, records, stage, view, model, args.output)
     return 0
 
 
@@ -91,6 +84,36 @@ def _apply_subset(records: list, dataset_config: dict) -> list:
     )
     print(f"using subset: {len(limited)} images from {len({record.species for record in limited})} species")
     return limited
+
+
+def _train_static_pairs(config: dict, records: list, stage: str, view: str, model, output: Path) -> None:
+    pairs = sample_pairs(
+        records=records,
+        taxonomic_level=stage,
+        positive_count=int(config["pair_sampling"]["positive_per_epoch"][stage]),
+        negative_count=int(config["pair_sampling"]["negative_per_epoch"][stage]),
+        seed=int(config["seed"]),
+    )
+    dataset = PairImageDataset(
+        pairs=pairs,
+        view=view,
+        image_size=int(config["views"][view]["image_size"]),
+        crop_size=int(config["views"].get("local", {}).get("crop_size", 32)),
+    )
+    dataloader = DataLoader(
+        dataset,
+        batch_size=int(config["training"]["batch_size"]),
+        shuffle=True,
+        num_workers=int(config["training"].get("num_workers", 2)),
+    )
+    train_siamese(
+        model=model,
+        dataloader=dataloader,
+        checkpoint_path=output,
+        epochs=int(config["training"]["epochs"]),
+        learning_rate=float(config["training"]["learning_rate"]),
+        momentum=float(config["training"]["momentum"]),
+    )
 
 
 if __name__ == "__main__":

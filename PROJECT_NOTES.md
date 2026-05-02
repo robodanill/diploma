@@ -157,4 +157,6 @@
   - 4-6 изображений на вид;
   - 1 эпоха;
   - уменьшенное число пар.
-- Следующее действие: в Colab распаковать `PlantCLEF2015_leaf_only.tar.gz`, запустить smoke-обучение `genus` и `species`, затем собрать `reference_index.pt`.
+- Завершено: notebook `notebooks/plantclef_colab_training.ipynb` очищен и пересобран как актуальный Colab-сценарий для leaf-only архива.
+- Завершено: обучение S-CNN теперь по умолчанию пересэмплирует positive/negative пары каждую эпоху (`dynamic_pairs: true`) и сохраняет checkpoint с минимальным train loss как `*_best.pt`.
+- Следующее действие: в Colab заново обучить `S-CNN (A)` на `configs/leaf_training.yaml`, проверить `plant-classifier-eval-genus` и продолжать к `S-CNN (B)` только при приемлемом top-k genus retrieval.
