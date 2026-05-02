@@ -117,4 +117,10 @@
   - генерация positive/negative пар для `family/genus/species`;
   - helper для центрального crop локального вида листа.
 - Проверено: `pytest`, `ruff check src tests`.
-- Следующее действие: реализовать PyTorch-модель Siamese CNN, dataset loader и Colab/notebook для PlantCLEF 2015.
+- Завершено: добавлен Colab-oriented контур обучения:
+  - `notebooks/plantclef_colab_training.ipynb`;
+  - CLI `plant-classifier-train`;
+  - загрузчик нормализованного `metadata.csv`;
+  - PyTorch `SiameseNetwork` с backbone `vgg16/alexnet/googlenet`;
+  - `PairImageDataset` и базовый train loop.
+- Следующее действие: сделать построение reference index и реальный двухэтапный inference predictor для подключения к PyQt.
