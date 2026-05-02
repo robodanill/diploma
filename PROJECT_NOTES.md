@@ -136,4 +136,8 @@
   - кнопка `Load Model` для выбора `genus checkpoint`, `species checkpoint`, `reference index`;
   - поддержка переменных окружения `PLANT_CLASSIFIER_GENUS_CHECKPOINT`, `PLANT_CLASSIFIER_SPECIES_CHECKPOINT`, `PLANT_CLASSIFIER_REFERENCE_INDEX`;
   - PyTorch импортируется лениво только при загрузке реальной модели.
-- Следующее действие: после появления реального PlantCLEF архива проверить конвертер на фактической структуре датасета и при необходимости адаптировать aliases XML-полей.
+- Завершено: найден официальный открытый источник PlantCLEF 2015:
+  - `https://lab.plantnet.org/LifeCLEF/PlantCLEF2015/TrainingPackage/PlantCLEF2015TrainingData.tar.gz`;
+  - размер training archive: 17,664,271,777 bytes (~16.4 GiB).
+- В процессе: скачивание training archive в `data/plantclef2015/raw/PlantCLEF2015TrainingData.tar.gz`.
+- Следующее действие: распаковать архив, проверить фактическую структуру XML/изображений и адаптировать aliases XML-полей при необходимости.
