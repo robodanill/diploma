@@ -7,7 +7,7 @@ from pathlib import Path
 import torch
 import yaml
 
-from plant_classifier.data import ImageRecord, load_metadata_csv
+from plant_classifier.data import ImageRecord, limit_records_by_species, load_metadata_csv
 from plant_classifier.inference.scnn import ReferenceEmbedding, save_reference_index
 from plant_classifier.models.siamese import BackboneSpec, build_siamese_network
 from plant_classifier.training.image_pairs import build_image_transform
@@ -23,6 +23,7 @@ def main() -> int:
 
     config = _load_config(args.config)
     records = _load_records(config)
+    records = _apply_subset(records, config["dataset"])
     references = _select_references(
         records=records,
         references_per_class=int(config["inference"]["references_per_class"]),
@@ -91,6 +92,20 @@ def _load_records(config: dict) -> list[ImageRecord]:
     )
 
 
+def _apply_subset(records: list[ImageRecord], dataset_config: dict) -> list[ImageRecord]:
+    subset = dataset_config.get("subset")
+    if not subset:
+        return records
+    limited = limit_records_by_species(
+        records,
+        max_species=subset.get("max_species"),
+        min_images_per_species=int(subset.get("min_images_per_species", 1)),
+        max_images_per_species=subset.get("max_images_per_species"),
+    )
+    print(f"using subset: {len(limited)} images from {len({record.species for record in limited})} species")
+    return limited
+
+
 def _select_references(records: list[ImageRecord], references_per_class: int) -> list[ImageRecord]:
     grouped: dict[str, list[ImageRecord]] = defaultdict(list)
     for record in records:
@@ -111,4 +126,3 @@ def _load_rgb(path: Path):
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

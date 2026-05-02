@@ -39,3 +39,29 @@ def load_metadata_csv(
             )
     return records
 
+
+def limit_records_by_species(
+    records: list[ImageRecord],
+    max_species: int | None = None,
+    min_images_per_species: int = 1,
+    max_images_per_species: int | None = None,
+) -> list[ImageRecord]:
+    """Select a deterministic species-balanced subset for smoke experiments."""
+
+    grouped: dict[str, list[ImageRecord]] = {}
+    for record in sorted(records, key=lambda item: (item.species, str(item.image_path))):
+        grouped.setdefault(record.species, []).append(record)
+
+    selected: list[ImageRecord] = []
+    species_seen = 0
+    for species in sorted(grouped):
+        species_records = grouped[species]
+        if len(species_records) < min_images_per_species:
+            continue
+        limit = max_images_per_species or len(species_records)
+        selected.extend(species_records[:limit])
+        species_seen += 1
+        if max_species is not None and species_seen >= max_species:
+            break
+
+    return selected

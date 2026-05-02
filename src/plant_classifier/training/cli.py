@@ -6,7 +6,7 @@ from pathlib import Path
 import yaml
 from torch.utils.data import DataLoader
 
-from plant_classifier.data import load_metadata_csv, sample_pairs
+from plant_classifier.data import limit_records_by_species, load_metadata_csv, sample_pairs
 from plant_classifier.models.siamese import BackboneSpec, build_siamese_network
 from plant_classifier.training.image_pairs import PairImageDataset
 from plant_classifier.training.loop import train_siamese
@@ -29,6 +29,7 @@ def main() -> int:
         genus_column=dataset_config["genus_column"],
         species_column=dataset_config["species_column"],
     )
+    records = _apply_subset(records, dataset_config)
 
     stage = args.stage
     view = "global" if stage == "genus" else "local"
@@ -76,6 +77,19 @@ def _load_config(path: Path) -> dict:
         return yaml.safe_load(file)
 
 
+def _apply_subset(records: list, dataset_config: dict) -> list:
+    subset = dataset_config.get("subset")
+    if not subset:
+        return records
+    limited = limit_records_by_species(
+        records,
+        max_species=subset.get("max_species"),
+        min_images_per_species=int(subset.get("min_images_per_species", 1)),
+        max_images_per_species=subset.get("max_images_per_species"),
+    )
+    print(f"using subset: {len(limited)} images from {len({record.species for record in limited})} species")
+    return limited
+
+
 if __name__ == "__main__":
     raise SystemExit(main())
-
