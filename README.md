@@ -33,6 +33,7 @@ Open `notebooks/plantclef_colab_training.ipynb` in Colab and set `PROJECT_DIR` t
 repository copy in Google Drive. The notebook installs the ML dependencies and runs:
 
 ```bash
+plant-classifier-prepare-plantclef --source-root data/plantclef2015 --output data/plantclef2015/metadata.csv
 plant-classifier-train --stage genus --output checkpoints/scnn_genus_vgg16.pt
 plant-classifier-train --stage species --output checkpoints/scnn_species_vgg16.pt
 plant-classifier-build-index --genus-checkpoint checkpoints/scnn_genus_vgg16.pt --species-checkpoint checkpoints/scnn_species_vgg16.pt --output checkpoints/reference_index.pt

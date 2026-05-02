@@ -127,4 +127,9 @@
   - CLI `plant-classifier-build-index`;
   - `ReferenceEmbedding`/`reference_index.pt`;
   - `TwoStageSiamesePredictor` для genus-to-species инференса по двум checkpoint-файлам и reference index.
-- Следующее действие: добавить настройку загрузки реальной модели в PyQt и подготовить конвертацию PlantCLEF metadata в нормализованный CSV.
+- Завершено: добавлен конвертер PlantCLEF XML-аннотаций:
+  - CLI `plant-classifier-prepare-plantclef`;
+  - сканирование XML и изображений;
+  - фильтр `Content=Leaf` по умолчанию;
+  - вывод нормализованного `metadata.csv`.
+- Следующее действие: добавить настройку загрузки реальной модели в PyQt.
