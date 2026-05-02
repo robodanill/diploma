@@ -29,7 +29,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from plant_classifier.inference import ImagePrediction, Predictor, StubPredictor
+from plant_classifier.inference import ImagePrediction, ModelArtifacts, Predictor, create_predictor
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
 
@@ -89,7 +89,7 @@ class ResultCard(QFrame):
 class MainWindow(QMainWindow):
     def __init__(self, predictor: Predictor | None = None) -> None:
         super().__init__()
-        self.predictor = predictor or StubPredictor()
+        self.predictor = predictor or create_predictor()
         self.thread_pool = QThreadPool.globalInstance()
         self.image_paths: list[Path] = []
         self.predictions: list[ImagePrediction] = []
@@ -113,11 +113,16 @@ class MainWindow(QMainWindow):
         self.clear_action = QAction("Clear", self)
         self.clear_action.triggered.connect(self.clear_all)
 
+        self.load_model_action = QAction("Load Model", self)
+        self.load_model_action.triggered.connect(self.load_model_artifacts)
+
     def _build_ui(self) -> None:
         toolbar = QToolBar("Main")
         toolbar.setMovable(False)
         toolbar.addAction(self.open_images_action)
         toolbar.addAction(self.open_folder_action)
+        toolbar.addSeparator()
+        toolbar.addAction(self.load_model_action)
         toolbar.addSeparator()
         toolbar.addAction(self.run_action)
         toolbar.addAction(self.clear_action)
@@ -248,6 +253,32 @@ class MainWindow(QMainWindow):
         task.signals.failed.connect(self._on_predictions_failed)
         self.thread_pool.start(task)
 
+    def load_model_artifacts(self) -> None:
+        genus_checkpoint = self._select_artifact("Select genus checkpoint")
+        if genus_checkpoint is None:
+            return
+        species_checkpoint = self._select_artifact("Select species checkpoint")
+        if species_checkpoint is None:
+            return
+        reference_index = self._select_artifact("Select reference index")
+        if reference_index is None:
+            return
+
+        try:
+            self.predictor = create_predictor(
+                ModelArtifacts(
+                    genus_checkpoint=genus_checkpoint,
+                    species_checkpoint=species_checkpoint,
+                    reference_index=reference_index,
+                )
+            )
+        except Exception as exc:
+            QMessageBox.critical(self, "Model load failed", str(exc))
+            self.statusBar().showMessage("Model load failed")
+            return
+
+        self.statusBar().showMessage("Loaded trained S-CNN model artifacts")
+
     def clear_all(self) -> None:
         self.image_paths.clear()
         self.predictions.clear()
@@ -313,6 +344,15 @@ class MainWindow(QMainWindow):
                 )
         self.detail_text.setPlainText("\n".join(lines))
 
+    def _select_artifact(self, title: str) -> Path | None:
+        file_name, _ = QFileDialog.getOpenFileName(
+            self,
+            title,
+            str(Path.cwd()),
+            "PyTorch artifacts (*.pt *.pth);;All files (*)",
+        )
+        return Path(file_name) if file_name else None
+
 
 def is_image_path(path: Path) -> bool:
     return path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
@@ -341,4 +381,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

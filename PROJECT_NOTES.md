@@ -132,4 +132,8 @@
   - сканирование XML и изображений;
   - фильтр `Content=Leaf` по умолчанию;
   - вывод нормализованного `metadata.csv`.
-- Следующее действие: добавить настройку загрузки реальной модели в PyQt.
+- Завершено: добавлена загрузка реальных артефактов в PyQt:
+  - кнопка `Load Model` для выбора `genus checkpoint`, `species checkpoint`, `reference index`;
+  - поддержка переменных окружения `PLANT_CLASSIFIER_GENUS_CHECKPOINT`, `PLANT_CLASSIFIER_SPECIES_CHECKPOINT`, `PLANT_CLASSIFIER_REFERENCE_INDEX`;
+  - PyTorch импортируется лениво только при загрузке реальной модели.
+- Следующее действие: после появления реального PlantCLEF архива проверить конвертер на фактической структуре датасета и при необходимости адаптировать aliases XML-полей.
