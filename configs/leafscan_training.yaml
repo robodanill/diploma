@@ -1,0 +1,62 @@
+seed: 42
+
+dataset:
+  name: PlantCLEF2015LeafScan
+  root: data/plantclef2015/leafscan
+  metadata: data/plantclef2015/leafscan_metadata.csv
+  image_column: image_path
+  family_column: family
+  genus_column: genus
+  species_column: species
+  subset:
+    min_images_per_species: 6
+    max_images_per_species: 6
+
+views:
+  global:
+    image_size: 224
+  local:
+    image_size: 224
+    crop_size: 32
+    crop_position: center
+
+preprocessing:
+  enabled: true
+  leaf_bbox: true
+
+pair_sampling:
+  positive_per_epoch:
+    genus: 400
+    species: 800
+  negative_per_epoch:
+    genus: 600
+    species: 1200
+  hard_negative_ratio: 0.0
+
+model:
+  backbone: vgg16
+  pretrained: true
+  embedding_dim: 4096
+  distance: l1
+
+training:
+  batch_size: 32
+  dynamic_pairs: true
+  epochs: 80
+  max_iterations: 2048
+  num_workers: 2
+  optimizer: sgd
+  learning_rate: 0.001
+  momentum: 0.9
+  lr_decay_step: 512
+  lr_decay_gamma: 0.5
+  split: train
+
+evaluation:
+  enabled: false
+
+inference:
+  references_per_class: 6
+  reference_split: train
+  genus_candidates: 30
+  top_k: 5
