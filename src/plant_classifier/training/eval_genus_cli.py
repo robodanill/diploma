@@ -22,7 +22,7 @@ def main() -> int:
     parser.add_argument("--max-species", type=int, default=40)
     parser.add_argument("--references-per-genus", type=int, default=2)
     parser.add_argument("--queries-per-genus", type=int, default=2)
-    parser.add_argument("--top-k", type=int, default=5)
+    parser.add_argument("--top-k", type=int, nargs="+", default=[1, 3, 5])
     args = parser.parse_args()
 
     config = _load_config(args.config)
@@ -58,12 +58,16 @@ def main() -> int:
         queries=queries,
         image_size=int(config["views"]["global"]["image_size"]),
         crop_size=int(config["views"]["local"]["crop_size"]),
-        top_k=args.top_k,
+        top_ks=tuple(args.top_k),
         device=device,
     )
 
-    print(f"references={result.references} queries={result.queries} top_k={result.top_k}")
-    print(f"top{result.top_k}_genus_accuracy={result.accuracy:.3f} ({result.hits}/{result.queries})")
+    print(f"references={result.references} queries={result.queries} top_k={list(result.top_ks)}")
+    for top_k in result.top_ks:
+        print(
+            f"top{top_k}_genus_accuracy={result.accuracies[top_k]:.3f} "
+            f"({result.hits[top_k]}/{result.queries})"
+        )
     print("query genus distribution:", describe_genus_distribution(queries))
     print("reference genus distribution:", describe_genus_distribution(references))
     return 0

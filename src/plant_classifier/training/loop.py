@@ -142,7 +142,7 @@ def train_siamese_with_dynamic_pairs(
         if is_best:
             best_loss = last_loss
             if eval_result is not None:
-                best_eval = eval_result.accuracy
+                best_eval = eval_result.primary_accuracy
             torch.save(model.state_dict(), best_checkpoint_path)
             best_marker = " best"
         else:
@@ -160,7 +160,7 @@ def _is_best(
     best_eval: float,
 ) -> bool:
     if eval_result is not None:
-        return eval_result.accuracy > best_eval
+        return eval_result.primary_accuracy > best_eval
     return loss < best_loss
 
 
@@ -181,9 +181,12 @@ def _format_epoch(
     if eval_result is not None:
         parts.extend(
             [
-                f"top{eval_result.top_k}_genus_accuracy={eval_result.accuracy:.3f}",
-                f"best_top{eval_result.top_k}={best_eval:.3f}",
-                f"eval={eval_result.hits}/{eval_result.queries}",
+                " ".join(
+                    f"top{top_k}_genus_accuracy={eval_result.accuracies[top_k]:.3f}"
+                    for top_k in eval_result.top_ks
+                ),
+                f"best_top{eval_result.primary_top_k}={best_eval:.3f}",
+                f"eval={eval_result.hits[eval_result.primary_top_k]}/{eval_result.queries}",
             ]
         )
     parts.append(f"time={elapsed:.1f}s{best_marker}")

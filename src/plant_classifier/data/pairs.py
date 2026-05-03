@@ -13,6 +13,7 @@ class ImageRecord:
     family: str
     genus: str
     species: str
+    split: str = ""
 
     def label_for(self, level: str) -> str:
         if level == "family":
@@ -109,4 +110,3 @@ def _sample_negative_pairs(
             )
         )
     return pairs
-

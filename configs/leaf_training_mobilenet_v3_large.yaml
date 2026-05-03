@@ -3,7 +3,7 @@ seed: 42
 dataset:
   name: PlantCLEF2015LeafMobileNetV3Large
   root: data/plantclef2015/leaf
-  metadata: data/plantclef2015/metadata.csv
+  metadata: data/plantclef2015/metadata_split.csv
   image_column: image_path
   family_column: family
   genus_column: genus
@@ -41,13 +41,15 @@ training:
   momentum: 0.9
   lr_decay_step: 512
   lr_decay_gamma: 0.5
+  split: train
 
 evaluation:
   enabled: true
   max_species: 120
   references_per_genus: 2
   queries_per_genus: 2
-  top_k: 5
+  split: val
+  top_k: [1, 3, 5]
 
 inference:
   references_per_class: 6

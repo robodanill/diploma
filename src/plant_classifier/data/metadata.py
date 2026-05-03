@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import csv
+import random
+from collections import defaultdict
 from pathlib import Path
 
 from plant_classifier.data.pairs import ImageRecord
@@ -13,6 +15,7 @@ def load_metadata_csv(
     family_column: str = "family",
     genus_column: str = "genus",
     species_column: str = "species",
+    split_column: str = "split",
 ) -> list[ImageRecord]:
     """Load image records from a normalized metadata CSV file."""
 
@@ -35,9 +38,91 @@ def load_metadata_csv(
                     family=row[family_column],
                     genus=row[genus_column],
                     species=row[species_column],
+                    split=row.get(split_column, ""),
                 )
             )
     return records
+
+
+def filter_records_by_split(records: list[ImageRecord], split: str | None) -> list[ImageRecord]:
+    """Return records for a split, falling back to all records when split labels are absent."""
+
+    if not split:
+        return records
+    if not any(record.split for record in records):
+        return records
+    return [record for record in records if record.split == split]
+
+
+def create_species_stratified_split(
+    records: list[ImageRecord],
+    train_ratio: float = 0.7,
+    val_ratio: float = 0.15,
+    test_ratio: float = 0.15,
+    seed: int = 42,
+) -> list[ImageRecord]:
+    """Create a deterministic image-level train/val/test split inside each species."""
+
+    if round(train_ratio + val_ratio + test_ratio, 8) != 1.0:
+        raise ValueError("train_ratio + val_ratio + test_ratio must be 1.0")
+
+    rng = random.Random(seed)
+    grouped: dict[str, list[ImageRecord]] = defaultdict(list)
+    for record in records:
+        grouped[record.species].append(record)
+
+    split_records: list[ImageRecord] = []
+    for species in sorted(grouped):
+        species_records = sorted(grouped[species], key=lambda item: str(item.image_path))
+        rng.shuffle(species_records)
+        split_names = _split_names_for_count(len(species_records), train_ratio, val_ratio)
+        for record, split in zip(species_records, split_names, strict=True):
+            split_records.append(
+                ImageRecord(
+                    image_path=record.image_path,
+                    family=record.family,
+                    genus=record.genus,
+                    species=record.species,
+                    split=split,
+                )
+            )
+    return sorted(split_records, key=lambda item: str(item.image_path))
+
+
+def write_metadata_csv(records: list[ImageRecord], output_path: Path, dataset_root: Path) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8", newline="") as file:
+        writer = csv.DictWriter(file, fieldnames=["image_path", "family", "genus", "species", "split"])
+        writer.writeheader()
+        for record in records:
+            writer.writerow(
+                {
+                    "image_path": _safe_relative(record.image_path, dataset_root),
+                    "family": record.family,
+                    "genus": record.genus,
+                    "species": record.species,
+                    "split": record.split,
+                }
+            )
+
+
+def _split_names_for_count(count: int, train_ratio: float, val_ratio: float) -> list[str]:
+    if count <= 2:
+        return ["train"] * count
+    train_count = max(1, int(count * train_ratio))
+    val_count = max(1, int(count * val_ratio))
+    if train_count + val_count >= count:
+        train_count = max(1, count - 2)
+        val_count = 1
+    test_count = count - train_count - val_count
+    return ["train"] * train_count + ["val"] * val_count + ["test"] * test_count
+
+
+def _safe_relative(path: Path, root: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(root.resolve()))
+    except ValueError:
+        return str(path)
 
 
 def limit_records_by_species(

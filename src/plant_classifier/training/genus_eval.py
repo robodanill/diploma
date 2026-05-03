@@ -13,11 +13,19 @@ from plant_classifier.training.image_pairs import build_image_transform
 
 @dataclass(frozen=True)
 class GenusEvalResult:
-    accuracy: float
-    hits: int
+    accuracies: dict[int, float]
+    hits: dict[int, int]
     queries: int
     references: int
-    top_k: int
+    top_ks: tuple[int, ...]
+
+    @property
+    def primary_top_k(self) -> int:
+        return max(self.top_ks)
+
+    @property
+    def primary_accuracy(self) -> float:
+        return self.accuracies[self.primary_top_k]
 
 
 def prepare_genus_eval_records(
@@ -64,7 +72,7 @@ def evaluate_genus_retrieval(
     queries: list[ImageRecord],
     image_size: int,
     crop_size: int,
-    top_k: int,
+    top_ks: tuple[int, ...],
     device: torch.device,
 ) -> GenusEvalResult:
     if not references or not queries:
@@ -73,27 +81,30 @@ def evaluate_genus_retrieval(
     was_training = model.training
     model.eval()
     transform = build_image_transform("global", image_size=image_size, crop_size=crop_size)
+    top_ks = tuple(sorted(set(top_ks)))
+    max_top_k = max(top_ks)
     reference_embeddings = [
         (record, embed_image(model, record.image_path, transform, device)) for record in references
     ]
 
-    hits = 0
+    hits = {top_k: 0 for top_k in top_ks}
     for query in queries:
         query_embedding = embed_image(model, query.image_path, transform, device)
         ranked = rank_references(model, query_embedding, reference_embeddings)
-        top_genera = [record.genus for record, _ in ranked[:top_k]]
-        if query.genus in top_genera:
-            hits += 1
+        top_genera = [record.genus for record, _ in ranked[:max_top_k]]
+        for top_k in top_ks:
+            if query.genus in top_genera[:top_k]:
+                hits[top_k] += 1
 
     if was_training:
         model.train()
 
     return GenusEvalResult(
-        accuracy=hits / len(queries),
+        accuracies={top_k: hits[top_k] / len(queries) for top_k in top_ks},
         hits=hits,
         queries=len(queries),
         references=len(references),
-        top_k=top_k,
+        top_ks=top_ks,
     )
 
 

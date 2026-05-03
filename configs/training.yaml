@@ -41,6 +41,7 @@ training:
   momentum: 0.9
   lr_decay_step: 512
   lr_decay_gamma: 0.5
+  split: train
 
 inference:
   references_per_class: 6

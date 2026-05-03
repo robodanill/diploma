@@ -160,6 +160,12 @@
 - Завершено: notebook `notebooks/plantclef_colab_training.ipynb` очищен и пересобран как актуальный Colab-сценарий для leaf-only архива.
 - Завершено: обучение S-CNN теперь по умолчанию пересэмплирует positive/negative пары каждую эпоху (`dynamic_pairs: true`) и сохраняет checkpoint с минимальным train loss как `*_best.pt`.
 - Завершено: для `genus`-этапа добавлена validation между эпохами: `top-k genus retrieval`, а `*_best.pt` сохраняется по лучшей validation accuracy.
+- Завершено: добавлен явный image-level `train/val/test` split:
+  - CLI `plant-classifier-split-metadata`;
+  - `metadata_split.csv`;
+  - обучение использует `split=train`;
+  - validation между эпохами использует `split=val`;
+  - считаются `top-1/top-3/top-5` genus retrieval метрики.
 - Завершено: добавлены современные CNN-backbone для сравнения в том же S-CNN методе:
   - `efficientnet_b3`;
   - `mobilenet_v3_large`.

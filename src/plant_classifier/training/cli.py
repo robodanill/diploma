@@ -6,7 +6,12 @@ from pathlib import Path
 import yaml
 from torch.utils.data import DataLoader
 
-from plant_classifier.data import limit_records_by_species, load_metadata_csv, sample_pairs
+from plant_classifier.data import (
+    filter_records_by_split,
+    limit_records_by_species,
+    load_metadata_csv,
+    sample_pairs,
+)
 from plant_classifier.models.siamese import BackboneSpec, build_siamese_network
 from plant_classifier.training.genus_eval import evaluate_genus_retrieval, prepare_genus_eval_records
 from plant_classifier.training.image_pairs import PairImageDataset
@@ -33,6 +38,12 @@ def main() -> int:
     )
     records = _apply_subset(records, dataset_config)
     validate_records_exist(records)
+    train_records = filter_records_by_split(records, config["training"].get("split", "train"))
+    validate_records_exist(train_records)
+    print(
+        f"training split={config['training'].get('split', 'train')} "
+        f"records={len(train_records)}"
+    )
 
     stage = args.stage
     view = "global" if stage == "genus" else "local"
@@ -47,7 +58,7 @@ def main() -> int:
     if dynamic_pairs:
         train_siamese_with_dynamic_pairs(
             model=model,
-            records=records,
+            records=train_records,
             taxonomic_level=stage,
             view=view,
             checkpoint_path=args.output,
@@ -64,7 +75,7 @@ def main() -> int:
             eval_fn=_build_eval_fn(config, records, stage),
         )
     else:
-        _train_static_pairs(config, records, stage, view, model, args.output)
+        _train_static_pairs(config, train_records, stage, view, model, args.output)
     return 0
 
 
@@ -123,17 +134,17 @@ def _build_eval_fn(config: dict, records: list, stage: str):
         return None
 
     references, queries = prepare_genus_eval_records(
-        records=records,
+        records=filter_records_by_split(records, evaluation_config.get("split", "val")),
         max_species=evaluation_config.get("max_species"),
         references_per_genus=int(evaluation_config.get("references_per_genus", 2)),
         queries_per_genus=int(evaluation_config.get("queries_per_genus", 2)),
     )
-    top_k = int(evaluation_config.get("top_k", 5))
+    top_ks = _parse_top_ks(evaluation_config.get("top_k", [1, 3, 5]))
     image_size = int(config["views"]["global"]["image_size"])
     crop_size = int(config["views"]["local"]["crop_size"])
     print(
         f"genus eval enabled: references={len(references)} "
-        f"queries={len(queries)} top_k={top_k}"
+        f"queries={len(queries)} top_k={top_ks}"
     )
 
     def eval_fn(model, device):
@@ -143,11 +154,17 @@ def _build_eval_fn(config: dict, records: list, stage: str):
             queries=queries,
             image_size=image_size,
             crop_size=crop_size,
-            top_k=top_k,
+            top_ks=top_ks,
             device=device,
         )
 
     return eval_fn
+
+
+def _parse_top_ks(value) -> tuple[int, ...]:
+    if isinstance(value, int):
+        return (value,)
+    return tuple(int(item) for item in value)
 
 
 if __name__ == "__main__":
