@@ -32,6 +32,7 @@ def train_siamese(
     """Train a Siamese model with binary cross-entropy over pair labels."""
 
     resolved_device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
+    print(f"training device={resolved_device}", flush=True)
     model.to(resolved_device)
     model.train()
 
@@ -89,6 +90,7 @@ def train_siamese_with_dynamic_pairs(
     """Train a Siamese model while re-sampling positive/negative pairs every epoch."""
 
     resolved_device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
+    print(f"training device={resolved_device}", flush=True)
     model.to(resolved_device)
     model.train()
 
@@ -110,6 +112,11 @@ def train_siamese_with_dynamic_pairs(
             positive_count=positive_count,
             negative_count=negative_count,
             seed=seed + epoch,
+        )
+        print(
+            f"epoch={epoch + 1} sampled_pairs={len(pairs)} "
+            f"batch_size={batch_size} device={resolved_device}",
+            flush=True,
         )
         dataset = PairImageDataset(
             pairs=pairs,

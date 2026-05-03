@@ -49,12 +49,17 @@ def main() -> int:
     stage = args.stage
     view = "global" if stage == "genus" else "local"
     model_config = config["model"]
+    print(
+        f"building model backbone={model_config['backbone']} pretrained={bool(model_config['pretrained'])}",
+        flush=True,
+    )
     model = build_siamese_network(
         BackboneSpec(
             name=model_config["backbone"],
             pretrained=bool(model_config["pretrained"]),
         )
     )
+    print("model ready", flush=True)
     dynamic_pairs = bool(config["training"].get("dynamic_pairs", True))
     if dynamic_pairs:
         train_siamese_with_dynamic_pairs(
