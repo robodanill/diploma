@@ -59,7 +59,7 @@ def train_siamese(
 
         last_loss = running_loss / max(1, len(dataloader))
         elapsed = perf_counter() - started_at
-        print(f"epoch={epoch + 1} loss={last_loss:.4f} time={elapsed:.1f}s")
+        print(f"epoch={epoch + 1} loss={last_loss:.4f} time={elapsed:.1f}s", flush=True)
 
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(model.state_dict(), checkpoint_path)
@@ -155,7 +155,10 @@ def train_siamese_with_dynamic_pairs(
             best_marker = " best"
         else:
             best_marker = ""
-        print(_format_epoch(epoch, last_loss, best_loss, elapsed, eval_result, best_eval, best_marker))
+        print(
+            _format_epoch(epoch, last_loss, best_loss, elapsed, eval_result, best_eval, best_marker),
+            flush=True,
+        )
 
     torch.save(model.state_dict(), checkpoint_path)
     return TrainResult(checkpoint_path=checkpoint_path, last_loss=last_loss)

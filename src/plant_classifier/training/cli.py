@@ -42,7 +42,8 @@ def main() -> int:
     validate_records_exist(train_records)
     print(
         f"training split={config['training'].get('split', 'train')} "
-        f"records={len(train_records)}"
+        f"records={len(train_records)}",
+        flush=True,
     )
 
     stage = args.stage
@@ -95,7 +96,10 @@ def _apply_subset(records: list, dataset_config: dict) -> list:
         min_images_per_species=int(subset.get("min_images_per_species", 1)),
         max_images_per_species=subset.get("max_images_per_species"),
     )
-    print(f"using subset: {len(limited)} images from {len({record.species for record in limited})} species")
+    print(
+        f"using subset: {len(limited)} images from {len({record.species for record in limited})} species",
+        flush=True,
+    )
     return limited
 
 
@@ -144,7 +148,8 @@ def _build_eval_fn(config: dict, records: list, stage: str):
     if not references or not queries:
         print(
             "genus eval skipped: not enough records to create references and queries "
-            f"for split={evaluation_config.get('split', 'val')}"
+            f"for split={evaluation_config.get('split', 'val')}",
+            flush=True,
         )
         return None
 
@@ -153,7 +158,8 @@ def _build_eval_fn(config: dict, records: list, stage: str):
     crop_size = int(config["views"]["local"]["crop_size"])
     print(
         f"genus eval enabled: references={len(references)} "
-        f"queries={len(queries)} top_k={top_ks}"
+        f"queries={len(queries)} top_k={top_ks}",
+        flush=True,
     )
 
     def eval_fn(model, device):
