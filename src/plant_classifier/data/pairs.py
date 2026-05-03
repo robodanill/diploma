@@ -39,13 +39,25 @@ def sample_pairs(
     positive_count: int,
     negative_count: int,
     seed: int = 42,
+    hard_negative_ratio: float = 0.0,
 ) -> list[PairRecord]:
     """Sample positive and negative image pairs for Siamese metric learning."""
 
     rng = random.Random(seed)
+    records = list(records)
     grouped = _group_by_label(records, taxonomic_level)
     positives = _sample_positive_pairs(grouped, positive_count, taxonomic_level, rng)
-    negatives = _sample_negative_pairs(grouped, negative_count, taxonomic_level, rng)
+    hard_negative_ratio = max(0.0, min(1.0, hard_negative_ratio))
+    hard_negative_count = int(negative_count * hard_negative_ratio)
+    easy_negative_count = negative_count - hard_negative_count
+    negatives = _sample_hard_negative_pairs(
+        records,
+        grouped,
+        hard_negative_count,
+        taxonomic_level,
+        rng,
+    )
+    negatives.extend(_sample_negative_pairs(grouped, easy_negative_count, taxonomic_level, rng))
     pairs = positives + negatives
     rng.shuffle(pairs)
     return pairs
@@ -67,6 +79,9 @@ def _sample_positive_pairs(
     taxonomic_level: str,
     rng: random.Random,
 ) -> list[PairRecord]:
+    if count <= 0:
+        return []
+
     eligible_labels = [label for label, items in grouped.items() if len(items) >= 2]
     if not eligible_labels:
         raise ValueError("At least one class must contain two images for positive pairs")
@@ -92,6 +107,9 @@ def _sample_negative_pairs(
     taxonomic_level: str,
     rng: random.Random,
 ) -> list[PairRecord]:
+    if count <= 0:
+        return []
+
     labels = [label for label, items in grouped.items() if items]
     if len(labels) < 2:
         raise ValueError("At least two classes are required for negative pairs")
@@ -110,3 +128,64 @@ def _sample_negative_pairs(
             )
         )
     return pairs
+
+
+def _sample_hard_negative_pairs(
+    records: list[ImageRecord],
+    grouped: dict[str, list[ImageRecord]],
+    count: int,
+    taxonomic_level: str,
+    rng: random.Random,
+) -> list[PairRecord]:
+    if count <= 0:
+        return []
+
+    hard_groups = _group_by_hard_negative_context(records, taxonomic_level)
+    eligible_contexts = [
+        context
+        for context, items in hard_groups.items()
+        if len({item.label_for(taxonomic_level) for item in items}) >= 2
+    ]
+    if not eligible_contexts:
+        return _sample_negative_pairs(grouped, count, taxonomic_level, rng)
+
+    pairs: list[PairRecord] = []
+    for _ in range(count):
+        context = rng.choice(eligible_contexts)
+        context_items = hard_groups[context]
+        left = rng.choice(context_items)
+        candidate_items = [
+            item
+            for item in context_items
+            if item.label_for(taxonomic_level) != left.label_for(taxonomic_level)
+        ]
+        right = rng.choice(candidate_items)
+        pairs.append(
+            PairRecord(
+                left=left.image_path,
+                right=right.image_path,
+                label=0,
+                taxonomic_level=taxonomic_level,
+            )
+        )
+    return pairs
+
+
+def _group_by_hard_negative_context(
+    records: Iterable[ImageRecord],
+    taxonomic_level: str,
+) -> dict[str, list[ImageRecord]]:
+    grouped: dict[str, list[ImageRecord]] = defaultdict(list)
+    for record in records:
+        context = _hard_negative_context(record, taxonomic_level)
+        if context:
+            grouped[context].append(record)
+    return dict(grouped)
+
+
+def _hard_negative_context(record: ImageRecord, taxonomic_level: str) -> str:
+    if taxonomic_level == "genus":
+        return record.family
+    if taxonomic_level == "species":
+        return record.genus
+    return ""

@@ -70,6 +70,7 @@ def main() -> int:
             checkpoint_path=args.output,
             positive_count=int(config["pair_sampling"]["positive_per_epoch"][stage]),
             negative_count=int(config["pair_sampling"]["negative_per_epoch"][stage]),
+            hard_negative_ratio=float(config["pair_sampling"].get("hard_negative_ratio", 0.0)),
             image_size=int(config["views"][view]["image_size"]),
             crop_size=int(config["views"].get("local", {}).get("crop_size", 32)),
             batch_size=int(config["training"]["batch_size"]),
@@ -114,6 +115,7 @@ def _train_static_pairs(config: dict, records: list, stage: str, view: str, mode
         taxonomic_level=stage,
         positive_count=int(config["pair_sampling"]["positive_per_epoch"][stage]),
         negative_count=int(config["pair_sampling"]["negative_per_epoch"][stage]),
+        hard_negative_ratio=float(config["pair_sampling"].get("hard_negative_ratio", 0.0)),
         seed=int(config["seed"]),
     )
     dataset = PairImageDataset(

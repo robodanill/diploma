@@ -75,6 +75,7 @@ def train_siamese_with_dynamic_pairs(
     checkpoint_path: Path,
     positive_count: int,
     negative_count: int,
+    hard_negative_ratio: float = 0.0,
     image_size: int = 224,
     crop_size: int = 32,
     batch_size: int = 32,
@@ -111,6 +112,7 @@ def train_siamese_with_dynamic_pairs(
             taxonomic_level=taxonomic_level,
             positive_count=positive_count,
             negative_count=negative_count,
+            hard_negative_ratio=hard_negative_ratio,
             seed=seed + epoch,
         )
         print(

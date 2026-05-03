@@ -19,11 +19,12 @@ views:
 
 pair_sampling:
   positive_per_epoch:
-    genus: 400
-    species: 800
+    genus: 2000
+    species: 4000
   negative_per_epoch:
-    genus: 600
-    species: 1200
+    genus: 3000
+    species: 6000
+  hard_negative_ratio: 0.5
 
 model:
   backbone: vgg16
@@ -34,7 +35,7 @@ model:
 training:
   batch_size: 32
   dynamic_pairs: true
-  epochs: 20
+  epochs: 30
   num_workers: 2
   optimizer: sgd
   learning_rate: 0.001
@@ -46,7 +47,7 @@ training:
 evaluation:
   enabled: true
   max_species: 120
-  references_per_genus: 2
+  references_per_genus: 4
   queries_per_genus: 2
   split: val
   top_k: [1, 3, 5]
