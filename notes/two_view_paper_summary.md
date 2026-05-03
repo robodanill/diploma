@@ -4,6 +4,7 @@ Source: `1-s2.0-S0925231221014934-main (1).pdf`.
 
 ## What they actually evaluate
 
+- The PlantCLEF numbers in the paper match the `Content=LeafScan` subset, not our earlier `Content=Leaf` subset.
 - The reported PlantCLEF 2015 result is on the predefined PlantCLEF 2015 test set, not on a validation split created from training images.
 - Their PlantCLEF leaf test set has 221 leaf images, 43 genus classes, and 60 species classes.
 - The PlantCLEF score is the LifeCLEF `S` metric, which rewards the inverse rank of the first correct match. It is not exactly the same as our current top-k genus retrieval accuracy.
@@ -75,6 +76,7 @@ Source: `1-s2.0-S0925231221014934-main (1).pdf`.
 
 ## Why our current pipeline differs
 
+- We were using `Content=Leaf` metadata: locally this is 13,367 train images, 490 genera, and 899 species. The paper's protocol is the much narrower PlantCLEF `LeafScan` subset.
 - We initially evaluated references and queries by splitting the same validation metadata, while the paper evaluates training references against the predefined test set.
 - We do not yet implement full two-stage species fusion; most current diagnostics are genus-only retrieval.
 - We currently do not perform leaf segmentation/Otsu/top-hat/bounding-box preprocessing; we resize raw leaf images.

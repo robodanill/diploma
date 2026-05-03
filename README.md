@@ -34,6 +34,7 @@ export PLANT_CLASSIFIER_GENUS_CHECKPOINT=checkpoints/scnn_genus_vgg16.pt
 export PLANT_CLASSIFIER_SPECIES_CHECKPOINT=checkpoints/scnn_species_vgg16.pt
 export PLANT_CLASSIFIER_REFERENCE_INDEX=checkpoints/reference_index.pt
 export PLANT_CLASSIFIER_BACKBONE=vgg16
+export PLANT_CLASSIFIER_PREPROCESSING=1
 plant-classifier-app
 ```
 
@@ -47,10 +48,11 @@ repository copy in Google Drive. The notebook installs the ML dependencies and r
 
 ```bash
 bash scripts/download_plantclef2015.sh
-plant-classifier-prepare-plantclef --source-root data/plantclef2015 --output data/plantclef2015/metadata.csv
-plant-classifier-train --stage genus --output checkpoints/scnn_genus_vgg16.pt
-plant-classifier-train --stage species --output checkpoints/scnn_species_vgg16.pt
-plant-classifier-build-index --genus-checkpoint checkpoints/scnn_genus_vgg16.pt --species-checkpoint checkpoints/scnn_species_vgg16.pt --output checkpoints/reference_index.pt
+python scripts/build_plantclef_content_bundle.py --source-root data/plantclef2015/train --output PlantCLEF2015_leafscan_only.tar.gz --content LeafScan
+plant-classifier-train --config configs/leafscan_training.yaml --stage genus --output checkpoints/scnn_genus_vgg16.pt
+plant-classifier-train --config configs/leafscan_training.yaml --stage species --output checkpoints/scnn_species_vgg16.pt
+plant-classifier-eval-species --config configs/leafscan_training.yaml --query-config configs/leafscan_test_vgg16.yaml --genus-checkpoint checkpoints/scnn_genus_vgg16_best.pt --species-checkpoint checkpoints/scnn_species_vgg16_best.pt
+plant-classifier-build-index --config configs/leafscan_training.yaml --genus-checkpoint checkpoints/scnn_genus_vgg16_best.pt --species-checkpoint checkpoints/scnn_species_vgg16_best.pt --output checkpoints/reference_index_leafscan_vgg16.pt
 ```
 
 The expected metadata format is documented in `notebooks/README.md`.

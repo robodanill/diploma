@@ -8,6 +8,7 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 
 from plant_classifier.data import PairRecord
+from plant_classifier.preprocessing.views import LeafBoundingBoxCrop
 
 
 class PairImageDataset(Dataset[tuple[Tensor, Tensor, Tensor]]):
@@ -19,10 +20,16 @@ class PairImageDataset(Dataset[tuple[Tensor, Tensor, Tensor]]):
         view: str,
         image_size: int = 224,
         crop_size: int = 32,
+        preprocessing: bool = False,
     ) -> None:
         self.pairs = pairs
         self.view = view
-        self.transform = build_image_transform(view=view, image_size=image_size, crop_size=crop_size)
+        self.transform = build_image_transform(
+            view=view,
+            image_size=image_size,
+            crop_size=crop_size,
+            preprocessing=preprocessing,
+        )
 
     def __len__(self) -> int:
         return len(self.pairs)
@@ -40,8 +47,21 @@ def _load_rgb(path: Path) -> Image.Image:
         return image.convert("RGB")
 
 
-def build_image_transform(view: str, image_size: int, crop_size: int) -> transforms.Compose:
+def build_image_transform(
+    view: str,
+    image_size: int,
+    crop_size: int,
+    preprocessing: bool = False,
+) -> transforms.Compose:
     steps: list[object] = []
+    if preprocessing:
+        steps.extend(
+            [
+                LeafBoundingBoxCrop(),
+                transforms.Resize((image_size, image_size)),
+            ]
+        )
+
     if view == "local":
         steps.extend(
             [
@@ -50,7 +70,8 @@ def build_image_transform(view: str, image_size: int, crop_size: int) -> transfo
             ]
         )
     elif view == "global":
-        steps.append(transforms.Resize((image_size, image_size)))
+        if not preprocessing:
+            steps.append(transforms.Resize((image_size, image_size)))
     else:
         raise ValueError(f"Unsupported image view: {view}")
 

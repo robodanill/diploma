@@ -26,6 +26,9 @@ def train_siamese(
     epochs: int = 20,
     learning_rate: float = 0.001,
     momentum: float = 0.9,
+    lr_decay_step: int = 0,
+    lr_decay_gamma: float = 0.5,
+    max_iterations: int | None = None,
     device: str | None = None,
     progress_every: int = 5,
 ) -> TrainResult:
@@ -38,13 +41,17 @@ def train_siamese(
 
     criterion = nn.BCELoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=momentum)
+    scheduler = _build_scheduler(optimizer, lr_decay_step, lr_decay_gamma)
     last_loss = 0.0
+    global_step = 0
 
     for epoch in range(epochs):
         started_at = perf_counter()
         running_loss = 0.0
+        batches_seen = 0
         total_batches = len(dataloader)
         for batch_index, (left, right, labels) in enumerate(dataloader, start=1):
+            batches_seen = batch_index
             left = left.to(resolved_device)
             right = right.to(resolved_device)
             labels = labels.to(resolved_device).float()
@@ -54,13 +61,24 @@ def train_siamese(
             loss = criterion(predictions, labels)
             loss.backward()
             optimizer.step()
+            if scheduler is not None:
+                scheduler.step()
+            global_step += 1
 
             running_loss += loss.item()
             _print_batch_progress(epoch, batch_index, total_batches, running_loss, progress_every)
+            if max_iterations and global_step >= max_iterations:
+                break
 
-        last_loss = running_loss / max(1, len(dataloader))
+        last_loss = running_loss / max(1, batches_seen)
         elapsed = perf_counter() - started_at
-        print(f"epoch={epoch + 1} loss={last_loss:.4f} time={elapsed:.1f}s", flush=True)
+        print(
+            f"epoch={epoch + 1} loss={last_loss:.4f} "
+            f"iterations={global_step} time={elapsed:.1f}s",
+            flush=True,
+        )
+        if max_iterations and global_step >= max_iterations:
+            break
 
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(model.state_dict(), checkpoint_path)
@@ -78,10 +96,14 @@ def train_siamese_with_dynamic_pairs(
     hard_negative_ratio: float = 0.0,
     image_size: int = 224,
     crop_size: int = 32,
+    preprocessing: bool = False,
     batch_size: int = 32,
     epochs: int = 20,
     learning_rate: float = 0.001,
     momentum: float = 0.9,
+    lr_decay_step: int = 0,
+    lr_decay_gamma: float = 0.5,
+    max_iterations: int | None = None,
     num_workers: int = 2,
     seed: int = 42,
     device: str | None = None,
@@ -97,6 +119,7 @@ def train_siamese_with_dynamic_pairs(
 
     criterion = nn.BCELoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=momentum)
+    scheduler = _build_scheduler(optimizer, lr_decay_step, lr_decay_gamma)
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     best_checkpoint_path = checkpoint_path.with_name(
         f"{checkpoint_path.stem}_best{checkpoint_path.suffix}"
@@ -105,6 +128,7 @@ def train_siamese_with_dynamic_pairs(
     last_loss = 0.0
     best_loss = float("inf")
     best_eval = -1.0
+    global_step = 0
 
     for epoch in range(epochs):
         pairs = sample_pairs(
@@ -125,6 +149,7 @@ def train_siamese_with_dynamic_pairs(
             view=view,
             image_size=image_size,
             crop_size=crop_size,
+            preprocessing=preprocessing,
         )
         dataloader = DataLoader(
             dataset,
@@ -135,8 +160,10 @@ def train_siamese_with_dynamic_pairs(
 
         started_at = perf_counter()
         running_loss = 0.0
+        batches_seen = 0
         total_batches = len(dataloader)
         for batch_index, (left, right, labels) in enumerate(dataloader, start=1):
+            batches_seen = batch_index
             left = left.to(resolved_device)
             right = right.to(resolved_device)
             labels = labels.to(resolved_device).float()
@@ -146,11 +173,16 @@ def train_siamese_with_dynamic_pairs(
             loss = criterion(predictions, labels)
             loss.backward()
             optimizer.step()
+            if scheduler is not None:
+                scheduler.step()
+            global_step += 1
 
             running_loss += loss.item()
             _print_batch_progress(epoch, batch_index, total_batches, running_loss, progress_every)
+            if max_iterations and global_step >= max_iterations:
+                break
 
-        last_loss = running_loss / max(1, len(dataloader))
+        last_loss = running_loss / max(1, batches_seen)
         elapsed = perf_counter() - started_at
         if eval_fn is not None:
             print(f"epoch={epoch + 1} eval=starting", flush=True)
@@ -168,9 +200,21 @@ def train_siamese_with_dynamic_pairs(
             _format_epoch(epoch, last_loss, best_loss, elapsed, eval_result, best_eval, best_marker),
             flush=True,
         )
+        if max_iterations and global_step >= max_iterations:
+            break
 
     torch.save(model.state_dict(), checkpoint_path)
     return TrainResult(checkpoint_path=checkpoint_path, last_loss=last_loss)
+
+
+def _build_scheduler(optimizer, lr_decay_step: int, lr_decay_gamma: float):
+    if lr_decay_step <= 0:
+        return None
+    return torch.optim.lr_scheduler.StepLR(
+        optimizer,
+        step_size=lr_decay_step,
+        gamma=lr_decay_gamma,
+    )
 
 
 def _is_best(

@@ -11,10 +11,13 @@ checks the expected dataset layout, and launches two training stages:
 After both checkpoints are ready, the notebook builds a reference index. The desktop
 application will later load the two checkpoints plus this index for real inference.
 
-Expected normalized metadata file:
+For the paper reproduction path, use `Content=LeafScan`, not `Content=Leaf`.
+The expected normalized metadata files are:
 
 ```text
-data/plantclef2015/metadata.csv
+data/plantclef2015/leafscan_metadata_split.csv
+data/plantclef2015/leafscan_metadata.csv
+data/plantclef2015/test_leafscan_metadata.csv
 ```
 
 Required columns:
@@ -23,15 +26,17 @@ Required columns:
 image_path,family,genus,species
 ```
 
-`image_path` may be absolute or relative to `data/plantclef2015`.
+`image_path` may be absolute or relative to the configured dataset root.
 
-If the dataset is unpacked with PlantCLEF XML annotations, create this file with:
+If the full PlantCLEF package is unpacked with XML annotations, create a compact
+LeafScan archive with:
 
 ```bash
-plant-classifier-prepare-plantclef \
-  --source-root data/plantclef2015 \
-  --output data/plantclef2015/metadata.csv
+python scripts/build_plantclef_content_bundle.py \
+  --source-root data/plantclef2015/train \
+  --output /content/drive/MyDrive/PlantCLEF2015_leafscan_only.tar.gz \
+  --content LeafScan
 ```
 
-By default only `Content=Leaf` images are included, matching the article's leaf-image
-setup. Use `--all-content` only for exploratory experiments.
+Use `plantclef_colab_test_data.ipynb` to build the matching
+`PlantCLEF2015_leafscan_test.tar.gz` bundle from the official annotated test package.

@@ -171,7 +171,15 @@
   - `mobilenet_v3_large`.
 - Завершено: в PyQt-приложение добавлен выбор backbone при `Load Model`; поддерживаются `vgg16`, `alexnet`, `googlenet`, `efficientnet_b3`, `mobilenet_v3_large`.
 - Завершено: синхронизация checkpoint-файлов на Google Drive теперь сохраняет локальные `*_best.pt` как обычные имена (`*.pt`), а Drive-файлы с `_best` не удаляет. В нашей договоренности `_best` на Drive означает лучший результат среди всех запусков.
+- Важно: после повторного разбора статьи выявлено, что для воспроизведения PlantCLEF 2015 нужно использовать `Content=LeafScan`, а не обычный `Content=Leaf`. Числа статьи (`12,605` train, `221` test, `60` test species, `43` test genus) соответствуют LeafScan-протоколу.
+- Завершено: добавлен strict LeafScan-контур:
+  - `configs/leafscan_training.yaml`;
+  - `configs/leafscan_smoke_training.yaml`;
+  - `configs/leafscan_test_vgg16.yaml`;
+  - preprocessing по Otsu/bounding-box перед resize/crop;
+  - CLI `plant-classifier-eval-species` для полного двухэтапного species evaluation с `Nr=6`, `Rk=30`;
+  - скрипт `scripts/build_plantclef_content_bundle.py` для сборки `LeafScan`-архивов.
 - Добавлены конфиги:
   - `configs/leaf_training_efficientnet_b3.yaml`;
   - `configs/leaf_training_mobilenet_v3_large.yaml`.
-- Следующее действие: в Colab заново обучить `S-CNN (A)` на `configs/leaf_training.yaml`, проверить `plant-classifier-eval-genus`, затем сравнить с `efficientnet_b3` и `mobilenet_v3_large`.
+- Следующее действие: в Colab собрать `PlantCLEF2015_leafscan_only.tar.gz` и `PlantCLEF2015_leafscan_test.tar.gz`, затем обучить VGG16 по `configs/leafscan_training.yaml` и смотреть `plant-classifier-eval-species`.

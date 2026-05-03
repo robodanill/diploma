@@ -68,6 +68,7 @@ def main() -> int:
         crop_size=int(config["views"]["local"]["crop_size"]),
         top_ks=tuple(args.top_k),
         device=device,
+        preprocessing=_preprocessing_enabled(config),
     )
 
     print(f"references={result.references} queries={result.queries} top_k={list(result.top_ks)}")
@@ -133,6 +134,11 @@ def _load_records(dataset_config: dict) -> list[ImageRecord]:
         genus_column=dataset_config["genus_column"],
         species_column=dataset_config["species_column"],
     )
+
+
+def _preprocessing_enabled(config: dict) -> bool:
+    preprocessing = config.get("preprocessing", {})
+    return bool(preprocessing.get("enabled", preprocessing.get("leaf_bbox", False)))
 
 
 if __name__ == "__main__":

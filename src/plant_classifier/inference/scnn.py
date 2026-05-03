@@ -35,6 +35,7 @@ class TwoStageSiamesePredictor:
         top_k: int = 5,
         image_size: int = 224,
         local_crop_size: int = 32,
+        preprocessing: bool = False,
         device: str | None = None,
     ) -> None:
         self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
@@ -43,8 +44,18 @@ class TwoStageSiamesePredictor:
         self.references = references
         self.genus_candidates = genus_candidates
         self.top_k = top_k
-        self.global_transform = build_image_transform("global", image_size=image_size, crop_size=local_crop_size)
-        self.local_transform = build_image_transform("local", image_size=image_size, crop_size=local_crop_size)
+        self.global_transform = build_image_transform(
+            "global",
+            image_size=image_size,
+            crop_size=local_crop_size,
+            preprocessing=preprocessing,
+        )
+        self.local_transform = build_image_transform(
+            "local",
+            image_size=image_size,
+            crop_size=local_crop_size,
+            preprocessing=preprocessing,
+        )
 
     @classmethod
     def from_artifacts(
@@ -167,4 +178,3 @@ def _load_rgb(path: Path) -> Image.Image:
 
 def _prepare(image: Image.Image, transform, device: torch.device) -> Tensor:
     return transform(image).unsqueeze(0).to(device)
-

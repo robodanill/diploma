@@ -39,6 +39,7 @@ def create_predictor(artifacts: ModelArtifacts | None = None) -> Predictor:
         reference_index=resolved_artifacts.reference_index,
         backbone=resolved_artifacts.backbone,
         pretrained=False,
+        preprocessing=_env_flag("PLANT_CLASSIFIER_PREPROCESSING"),
     )
 
 
@@ -54,3 +55,8 @@ def artifacts_from_environment() -> ModelArtifacts | None:
         reference_index=Path(references),
         backbone=os.getenv("PLANT_CLASSIFIER_BACKBONE", "vgg16"),
     )
+
+
+def _env_flag(name: str) -> bool:
+    value = os.getenv(name, "")
+    return value.lower() in {"1", "true", "yes", "on"}

@@ -36,9 +36,9 @@ def main() -> int:
         genus_column=dataset_config["genus_column"],
         species_column=dataset_config["species_column"],
     )
-    records = _apply_subset(records, dataset_config)
     validate_records_exist(records)
     train_records = filter_records_by_split(records, config["training"].get("split", "train"))
+    train_records = _apply_subset(train_records, dataset_config)
     validate_records_exist(train_records)
     print(
         f"training split={config['training'].get('split', 'train')} "
@@ -73,10 +73,14 @@ def main() -> int:
             hard_negative_ratio=float(config["pair_sampling"].get("hard_negative_ratio", 0.0)),
             image_size=int(config["views"][view]["image_size"]),
             crop_size=int(config["views"].get("local", {}).get("crop_size", 32)),
+            preprocessing=_preprocessing_enabled(config),
             batch_size=int(config["training"]["batch_size"]),
             epochs=int(config["training"]["epochs"]),
             learning_rate=float(config["training"]["learning_rate"]),
             momentum=float(config["training"]["momentum"]),
+            lr_decay_step=int(config["training"].get("lr_decay_step", 0)),
+            lr_decay_gamma=float(config["training"].get("lr_decay_gamma", 0.5)),
+            max_iterations=_optional_int(config["training"].get("max_iterations")),
             num_workers=int(config["training"].get("num_workers", 2)),
             seed=int(config["seed"]),
             eval_fn=_build_eval_fn(config, records, stage),
@@ -123,6 +127,7 @@ def _train_static_pairs(config: dict, records: list, stage: str, view: str, mode
         view=view,
         image_size=int(config["views"][view]["image_size"]),
         crop_size=int(config["views"].get("local", {}).get("crop_size", 32)),
+        preprocessing=_preprocessing_enabled(config),
     )
     dataloader = DataLoader(
         dataset,
@@ -137,6 +142,9 @@ def _train_static_pairs(config: dict, records: list, stage: str, view: str, mode
         epochs=int(config["training"]["epochs"]),
         learning_rate=float(config["training"]["learning_rate"]),
         momentum=float(config["training"]["momentum"]),
+        lr_decay_step=int(config["training"].get("lr_decay_step", 0)),
+        lr_decay_gamma=float(config["training"].get("lr_decay_gamma", 0.5)),
+        max_iterations=_optional_int(config["training"].get("max_iterations")),
         progress_every=int(config["training"].get("progress_every_batches", 5)),
     )
 
@@ -163,6 +171,7 @@ def _build_eval_fn(config: dict, records: list, stage: str):
     top_ks = _parse_top_ks(evaluation_config.get("top_k", [1, 3, 5]))
     image_size = int(config["views"]["global"]["image_size"])
     crop_size = int(config["views"]["local"]["crop_size"])
+    preprocessing = _preprocessing_enabled(config)
     print(
         f"genus eval enabled: references={len(references)} "
         f"queries={len(queries)} top_k={top_ks}",
@@ -176,6 +185,7 @@ def _build_eval_fn(config: dict, records: list, stage: str):
             queries=queries,
             image_size=image_size,
             crop_size=crop_size,
+            preprocessing=preprocessing,
             top_ks=top_ks,
             device=device,
         )
@@ -187,6 +197,17 @@ def _parse_top_ks(value) -> tuple[int, ...]:
     if isinstance(value, int):
         return (value,)
     return tuple(int(item) for item in value)
+
+
+def _preprocessing_enabled(config: dict) -> bool:
+    preprocessing = config.get("preprocessing", {})
+    return bool(preprocessing.get("enabled", preprocessing.get("leaf_bbox", False)))
+
+
+def _optional_int(value) -> int | None:
+    if value in (None, ""):
+        return None
+    return int(value)
 
 
 if __name__ == "__main__":

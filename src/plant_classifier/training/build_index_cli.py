@@ -7,7 +7,12 @@ from pathlib import Path
 import torch
 import yaml
 
-from plant_classifier.data import ImageRecord, limit_records_by_species, load_metadata_csv
+from plant_classifier.data import (
+    ImageRecord,
+    filter_records_by_split,
+    limit_records_by_species,
+    load_metadata_csv,
+)
 from plant_classifier.inference.scnn import ReferenceEmbedding, save_reference_index
 from plant_classifier.models.siamese import BackboneSpec, build_siamese_network
 from plant_classifier.training.image_pairs import build_image_transform
@@ -23,6 +28,10 @@ def main() -> int:
 
     config = _load_config(args.config)
     records = _load_records(config)
+    records = filter_records_by_split(
+        records,
+        config.get("inference", {}).get("reference_split", config["training"].get("split", "train")),
+    )
     records = _apply_subset(records, config["dataset"])
     references = _select_references(
         records=records,
@@ -46,11 +55,13 @@ def main() -> int:
         "global",
         image_size=int(config["views"]["global"]["image_size"]),
         crop_size=int(config["views"]["local"]["crop_size"]),
+        preprocessing=_preprocessing_enabled(config),
     )
     local_transform = build_image_transform(
         "local",
         image_size=int(config["views"]["local"]["image_size"]),
         crop_size=int(config["views"]["local"]["crop_size"]),
+        preprocessing=_preprocessing_enabled(config),
     )
 
     embeddings: list[ReferenceEmbedding] = []
@@ -115,6 +126,11 @@ def _select_references(records: list[ImageRecord], references_per_class: int) ->
     for species in sorted(grouped):
         references.extend(sorted(grouped[species], key=lambda item: str(item.image_path))[:references_per_class])
     return references
+
+
+def _preprocessing_enabled(config: dict) -> bool:
+    preprocessing = config.get("preprocessing", {})
+    return bool(preprocessing.get("enabled", preprocessing.get("leaf_bbox", False)))
 
 
 def _load_rgb(path: Path):

@@ -92,13 +92,19 @@ def evaluate_genus_retrieval(
     crop_size: int,
     top_ks: tuple[int, ...],
     device: torch.device,
+    preprocessing: bool = False,
 ) -> GenusEvalResult:
     if not references or not queries:
         raise ValueError("Not enough records to evaluate genus retrieval")
 
     was_training = model.training
     model.eval()
-    transform = build_image_transform("global", image_size=image_size, crop_size=crop_size)
+    transform = build_image_transform(
+        "global",
+        image_size=image_size,
+        crop_size=crop_size,
+        preprocessing=preprocessing,
+    )
     top_ks = tuple(sorted(set(top_ks)))
     max_top_k = max(top_ks)
     reference_embeddings = [
