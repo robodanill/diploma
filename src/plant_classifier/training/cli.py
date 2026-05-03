@@ -139,6 +139,13 @@ def _build_eval_fn(config: dict, records: list, stage: str):
         references_per_genus=int(evaluation_config.get("references_per_genus", 2)),
         queries_per_genus=int(evaluation_config.get("queries_per_genus", 2)),
     )
+    if not references or not queries:
+        print(
+            "genus eval skipped: not enough records to create references and queries "
+            f"for split={evaluation_config.get('split', 'val')}"
+        )
+        return None
+
     top_ks = _parse_top_ks(evaluation_config.get("top_k", [1, 3, 5]))
     image_size = int(config["views"]["global"]["image_size"])
     crop_size = int(config["views"]["local"]["crop_size"])

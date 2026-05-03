@@ -48,7 +48,7 @@ training:
   split: train
 
 evaluation:
-  enabled: true
+  enabled: false
   max_species: 40
   references_per_genus: 2
   queries_per_genus: 2

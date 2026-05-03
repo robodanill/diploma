@@ -25,6 +25,12 @@ def main() -> int:
     parser.add_argument("--top-k", type=int, nargs="+", default=[1, 3, 5])
     args = parser.parse_args()
 
+    if not args.checkpoint.exists():
+        raise FileNotFoundError(
+            f"Checkpoint does not exist: {args.checkpoint}. "
+            "Run plant-classifier-train first and check that it finished successfully."
+        )
+
     config = _load_config(args.config)
     dataset_config = config["dataset"]
     records = _load_records(dataset_config)
@@ -42,7 +48,11 @@ def main() -> int:
         queries_per_genus=args.queries_per_genus,
     )
     if not references or not queries:
-        raise ValueError("Not enough records to create references and queries")
+        print(
+            "genus eval skipped: not enough records to create references and queries "
+            f"(references={len(references)} queries={len(queries)})"
+        )
+        return 0
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_config = config["model"]
