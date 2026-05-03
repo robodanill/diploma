@@ -7,6 +7,14 @@ from pathlib import Path
 from plant_classifier.inference.predictor import Predictor
 from plant_classifier.inference.stub import StubPredictor
 
+SUPPORTED_BACKBONES = (
+    "vgg16",
+    "alexnet",
+    "googlenet",
+    "efficientnet_b3",
+    "mobilenet_v3_large",
+)
+
 
 @dataclass(frozen=True)
 class ModelArtifacts:
@@ -46,4 +54,3 @@ def artifacts_from_environment() -> ModelArtifacts | None:
         reference_index=Path(references),
         backbone=os.getenv("PLANT_CLASSIFIER_BACKBONE", "vgg16"),
     )
-

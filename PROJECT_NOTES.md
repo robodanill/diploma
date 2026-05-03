@@ -169,6 +169,8 @@
 - Завершено: добавлены современные CNN-backbone для сравнения в том же S-CNN методе:
   - `efficientnet_b3`;
   - `mobilenet_v3_large`.
+- Завершено: в PyQt-приложение добавлен выбор backbone при `Load Model`; поддерживаются `vgg16`, `alexnet`, `googlenet`, `efficientnet_b3`, `mobilenet_v3_large`.
+- Завершено: синхронизация checkpoint-файлов на Google Drive теперь сохраняет локальные `*_best.pt` как обычные имена (`*.pt`), а Drive-файлы с `_best` не удаляет. В нашей договоренности `_best` на Drive означает лучший результат среди всех запусков.
 - Добавлены конфиги:
   - `configs/leaf_training_efficientnet_b3.yaml`;
   - `configs/leaf_training_mobilenet_v3_large.yaml`.

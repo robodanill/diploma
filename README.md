@@ -33,8 +33,12 @@ After training, the app can load the exported artifacts through `Load Model`, or
 export PLANT_CLASSIFIER_GENUS_CHECKPOINT=checkpoints/scnn_genus_vgg16.pt
 export PLANT_CLASSIFIER_SPECIES_CHECKPOINT=checkpoints/scnn_species_vgg16.pt
 export PLANT_CLASSIFIER_REFERENCE_INDEX=checkpoints/reference_index.pt
+export PLANT_CLASSIFIER_BACKBONE=vgg16
 plant-classifier-app
 ```
+
+Supported backbones: `vgg16`, `alexnet`, `googlenet`, `efficientnet_b3`,
+`mobilenet_v3_large`.
 
 ## Train In Colab
 

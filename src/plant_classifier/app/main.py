@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QListWidget,
     QListWidgetItem,
@@ -29,7 +30,13 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from plant_classifier.inference import ImagePrediction, ModelArtifacts, Predictor, create_predictor
+from plant_classifier.inference import (
+    SUPPORTED_BACKBONES,
+    ImagePrediction,
+    ModelArtifacts,
+    Predictor,
+    create_predictor,
+)
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
 
@@ -263,6 +270,16 @@ class MainWindow(QMainWindow):
         reference_index = self._select_artifact("Select reference index")
         if reference_index is None:
             return
+        backbone, selected = QInputDialog.getItem(
+            self,
+            "Select model backbone",
+            "Backbone:",
+            list(SUPPORTED_BACKBONES),
+            0,
+            False,
+        )
+        if not selected:
+            return
 
         try:
             self.predictor = create_predictor(
@@ -270,6 +287,7 @@ class MainWindow(QMainWindow):
                     genus_checkpoint=genus_checkpoint,
                     species_checkpoint=species_checkpoint,
                     reference_index=reference_index,
+                    backbone=backbone,
                 )
             )
         except Exception as exc:
@@ -277,7 +295,7 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("Model load failed")
             return
 
-        self.statusBar().showMessage("Loaded trained S-CNN model artifacts")
+        self.statusBar().showMessage(f"Loaded trained S-CNN artifacts ({backbone})")
 
     def clear_all(self) -> None:
         self.image_paths.clear()
