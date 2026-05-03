@@ -65,6 +65,24 @@ def split_references_and_queries(
     return references, queries
 
 
+def select_reference_records(
+    records: list[ImageRecord],
+    taxonomic_level: str,
+    references_per_label: int,
+) -> list[ImageRecord]:
+    grouped: dict[str, list[ImageRecord]] = defaultdict(list)
+    for record in sorted(
+        records,
+        key=lambda item: (item.label_for(taxonomic_level), str(item.image_path)),
+    ):
+        grouped[record.label_for(taxonomic_level)].append(record)
+
+    references: list[ImageRecord] = []
+    for label in sorted(grouped):
+        references.extend(grouped[label][:references_per_label])
+    return references
+
+
 @torch.inference_mode()
 def evaluate_genus_retrieval(
     model,

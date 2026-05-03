@@ -1,0 +1,22 @@
+dataset:
+  name: PlantCLEF2015LeafTestEfficientNetB3
+  root: data/plantclef2015/test_leaf
+  metadata: data/plantclef2015/test_metadata.csv
+  image_column: image_path
+  family_column: family
+  genus_column: genus
+  species_column: species
+
+views:
+  global:
+    image_size: 224
+  local:
+    image_size: 224
+    crop_size: 32
+    crop_position: center
+
+model:
+  backbone: efficientnet_b3
+  pretrained: true
+  embedding_dim: 4096
+  distance: l1
