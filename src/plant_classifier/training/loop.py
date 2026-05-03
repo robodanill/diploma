@@ -27,6 +27,7 @@ def train_siamese(
     learning_rate: float = 0.001,
     momentum: float = 0.9,
     device: str | None = None,
+    progress_every: int = 5,
 ) -> TrainResult:
     """Train a Siamese model with binary cross-entropy over pair labels."""
 
@@ -41,7 +42,8 @@ def train_siamese(
     for epoch in range(epochs):
         started_at = perf_counter()
         running_loss = 0.0
-        for left, right, labels in dataloader:
+        total_batches = len(dataloader)
+        for batch_index, (left, right, labels) in enumerate(dataloader, start=1):
             left = left.to(resolved_device)
             right = right.to(resolved_device)
             labels = labels.to(resolved_device).float()
@@ -53,6 +55,7 @@ def train_siamese(
             optimizer.step()
 
             running_loss += loss.item()
+            _print_batch_progress(epoch, batch_index, total_batches, running_loss, progress_every)
 
         last_loss = running_loss / max(1, len(dataloader))
         elapsed = perf_counter() - started_at
@@ -81,6 +84,7 @@ def train_siamese_with_dynamic_pairs(
     seed: int = 42,
     device: str | None = None,
     eval_fn=None,
+    progress_every: int = 5,
 ) -> TrainResult:
     """Train a Siamese model while re-sampling positive/negative pairs every epoch."""
 
@@ -122,7 +126,8 @@ def train_siamese_with_dynamic_pairs(
 
         started_at = perf_counter()
         running_loss = 0.0
-        for left, right, labels in dataloader:
+        total_batches = len(dataloader)
+        for batch_index, (left, right, labels) in enumerate(dataloader, start=1):
             left = left.to(resolved_device)
             right = right.to(resolved_device)
             labels = labels.to(resolved_device).float()
@@ -134,9 +139,12 @@ def train_siamese_with_dynamic_pairs(
             optimizer.step()
 
             running_loss += loss.item()
+            _print_batch_progress(epoch, batch_index, total_batches, running_loss, progress_every)
 
         last_loss = running_loss / max(1, len(dataloader))
         elapsed = perf_counter() - started_at
+        if eval_fn is not None:
+            print(f"epoch={epoch + 1} eval=starting", flush=True)
         eval_result = eval_fn(model, resolved_device) if eval_fn is not None else None
         is_best = _is_best(last_loss, eval_result, best_loss, best_eval)
         if is_best:
@@ -162,6 +170,26 @@ def _is_best(
     if eval_result is not None:
         return eval_result.primary_accuracy > best_eval
     return loss < best_loss
+
+
+def _print_batch_progress(
+    epoch: int,
+    batch_index: int,
+    total_batches: int,
+    running_loss: float,
+    progress_every: int,
+) -> None:
+    if progress_every <= 0:
+        return
+    if batch_index % progress_every != 0 and batch_index != total_batches:
+        return
+
+    average_loss = running_loss / batch_index
+    print(
+        f"epoch={epoch + 1} batch={batch_index}/{total_batches} "
+        f"running_loss={average_loss:.4f}",
+        flush=True,
+    )
 
 
 def _format_epoch(

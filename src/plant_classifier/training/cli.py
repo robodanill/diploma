@@ -73,6 +73,7 @@ def main() -> int:
             num_workers=int(config["training"].get("num_workers", 2)),
             seed=int(config["seed"]),
             eval_fn=_build_eval_fn(config, records, stage),
+            progress_every=int(config["training"].get("progress_every_batches", 5)),
         )
     else:
         _train_static_pairs(config, train_records, stage, view, model, args.output)
@@ -125,6 +126,7 @@ def _train_static_pairs(config: dict, records: list, stage: str, view: str, mode
         epochs=int(config["training"]["epochs"]),
         learning_rate=float(config["training"]["learning_rate"]),
         momentum=float(config["training"]["momentum"]),
+        progress_every=int(config["training"].get("progress_every_batches", 5)),
     )
 
 
