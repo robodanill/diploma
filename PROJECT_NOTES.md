@@ -159,4 +159,11 @@
   - уменьшенное число пар.
 - Завершено: notebook `notebooks/plantclef_colab_training.ipynb` очищен и пересобран как актуальный Colab-сценарий для leaf-only архива.
 - Завершено: обучение S-CNN теперь по умолчанию пересэмплирует positive/negative пары каждую эпоху (`dynamic_pairs: true`) и сохраняет checkpoint с минимальным train loss как `*_best.pt`.
-- Следующее действие: в Colab заново обучить `S-CNN (A)` на `configs/leaf_training.yaml`, проверить `plant-classifier-eval-genus` и продолжать к `S-CNN (B)` только при приемлемом top-k genus retrieval.
+- Завершено: для `genus`-этапа добавлена validation между эпохами: `top-k genus retrieval`, а `*_best.pt` сохраняется по лучшей validation accuracy.
+- Завершено: добавлены современные CNN-backbone для сравнения в том же S-CNN методе:
+  - `efficientnet_b3`;
+  - `mobilenet_v3_large`.
+- Добавлены конфиги:
+  - `configs/leaf_training_efficientnet_b3.yaml`;
+  - `configs/leaf_training_mobilenet_v3_large.yaml`.
+- Следующее действие: в Colab заново обучить `S-CNN (A)` на `configs/leaf_training.yaml`, проверить `plant-classifier-eval-genus`, затем сравнить с `efficientnet_b3` и `mobilenet_v3_large`.

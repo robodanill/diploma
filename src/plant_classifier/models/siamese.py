@@ -11,7 +11,6 @@ from torchvision import models
 class BackboneSpec:
     name: str = "vgg16"
     pretrained: bool = True
-    embedding_dim: int = 4096
 
 
 class SiameseNetwork(nn.Module):
@@ -60,5 +59,17 @@ def build_backbone(spec: BackboneSpec) -> tuple[nn.Module, int]:
         model.fc = nn.Identity()
         return model, 1024
 
-    raise ValueError(f"Unsupported backbone: {spec.name}")
+    if name == "efficientnet_b3":
+        weights = models.EfficientNet_B3_Weights.DEFAULT if spec.pretrained else None
+        model = models.efficientnet_b3(weights=weights)
+        embedding_dim = model.classifier[-1].in_features
+        model.classifier = nn.Identity()
+        return model, embedding_dim
 
+    if name == "mobilenet_v3_large":
+        weights = models.MobileNet_V3_Large_Weights.DEFAULT if spec.pretrained else None
+        model = models.mobilenet_v3_large(weights=weights)
+        model.classifier = nn.Sequential(*list(model.classifier.children())[:-1])
+        return model, 1280
+
+    raise ValueError(f"Unsupported backbone: {spec.name}")

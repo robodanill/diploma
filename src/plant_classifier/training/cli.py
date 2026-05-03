@@ -41,7 +41,6 @@ def main() -> int:
         BackboneSpec(
             name=model_config["backbone"],
             pretrained=bool(model_config["pretrained"]),
-            embedding_dim=int(model_config["embedding_dim"]),
         )
     )
     dynamic_pairs = bool(config["training"].get("dynamic_pairs", True))
