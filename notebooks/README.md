@@ -1,6 +1,9 @@
 # Colab Training
 
-Use `plantclef_colab_training.ipynb` as the main Colab entry point.
+Use `plantclef_colab_leafscan_bundle.ipynb` first to build and save
+`PlantCLEF2015_leafscan_only.tar.gz` to Google Drive. Then use
+`plantclef_colab_test_data.ipynb` for the matching test bundle, and
+`plantclef_colab_training.ipynb` as the main training entry point.
 
 The notebook is intentionally thin: it installs the project, mounts Google Drive,
 checks the expected dataset layout, and launches two training stages:
@@ -28,8 +31,8 @@ image_path,family,genus,species
 
 `image_path` may be absolute or relative to the configured dataset root.
 
-If the full PlantCLEF package is unpacked with XML annotations, create a compact
-LeafScan archive with:
+If the full PlantCLEF package is already unpacked with XML annotations, create a
+compact LeafScan archive with:
 
 ```bash
 python scripts/build_plantclef_content_bundle.py \
