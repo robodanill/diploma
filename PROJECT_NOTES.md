@@ -174,6 +174,7 @@
 - Важно: после повторного разбора статьи выявлено, что для воспроизведения PlantCLEF 2015 нужно использовать `Content=LeafScan`, а не обычный `Content=Leaf`. Числа статьи (`12,605` train, `221` test, `60` test species, `43` test genus) соответствуют LeafScan-протоколу.
 - Завершено: добавлен strict LeafScan-контур:
   - `configs/leafscan_training.yaml`;
+  - `configs/leafscan_paper60_training.yaml`;
   - `configs/leafscan_smoke_training.yaml`;
   - `configs/leafscan_test_vgg16.yaml`;
   - preprocessing по Otsu/bounding-box перед resize/crop;
@@ -182,4 +183,4 @@
 - Добавлены конфиги:
   - `configs/leaf_training_efficientnet_b3.yaml`;
   - `configs/leaf_training_mobilenet_v3_large.yaml`.
-- Следующее действие: в Colab собрать `PlantCLEF2015_leafscan_only.tar.gz` и `PlantCLEF2015_leafscan_test.tar.gz`, затем обучить VGG16 по `configs/leafscan_training.yaml` и смотреть `plant-classifier-eval-species`.
+- Следующее действие: в Colab собрать `PlantCLEF2015_leafscan_only.tar.gz` и `PlantCLEF2015_leafscan_test.tar.gz`, затем обучить VGG16 по `configs/leafscan_paper60_training.yaml` и смотреть `plant-classifier-eval-species`.

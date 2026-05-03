@@ -7,11 +7,13 @@ Source: `1-s2.0-S0925231221014934-main (1).pdf`.
 - The PlantCLEF numbers in the paper match the `Content=LeafScan` subset, not our earlier `Content=Leaf` subset.
 - The reported PlantCLEF 2015 result is on the predefined PlantCLEF 2015 test set, not on a validation split created from training images.
 - Their PlantCLEF leaf test set has 221 leaf images, 43 genus classes, and 60 species classes.
+- For the final PlantCLEF comparison, S-CNN uses the 60 official test species and six training images per species: 360 S-CNN training images.
 - The PlantCLEF score is the LifeCLEF `S` metric, which rewards the inverse rank of the first correct match. It is not exactly the same as our current top-k genus retrieval accuracy.
 
 ## Data protocol
 
 - They emphasize few-sample metric learning: only six training images per species are used to train the S-CNN models.
+- The train pool for the paper-style final run is therefore the 6,527 training images belonging to the 60 species present in the official test set, then a six-per-species S-CNN subset is sampled from that pool.
 - PlantCLEF training subset in the paper: 12,605 training images when considering the taxonomic groups used for the method.
 - For S-CNN training pair counts on PlantCLEF 2015:
   - Family: 200 positive, 300 negative.

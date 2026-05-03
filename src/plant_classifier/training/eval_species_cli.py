@@ -20,7 +20,7 @@ from plant_classifier.training.validation import validate_records_exist
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Evaluate full two-stage S-CNN species retrieval.")
-    parser.add_argument("--config", type=Path, default=Path("configs/leafscan_training.yaml"))
+    parser.add_argument("--config", type=Path, default=Path("configs/leafscan_paper60_training.yaml"))
     parser.add_argument("--query-config", type=Path, default=Path("configs/leafscan_test_vgg16.yaml"))
     parser.add_argument("--genus-checkpoint", type=Path, required=True)
     parser.add_argument("--species-checkpoint", type=Path, required=True)

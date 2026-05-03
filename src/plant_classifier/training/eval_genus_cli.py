@@ -32,6 +32,11 @@ def main() -> int:
     parser.add_argument("--reference-level", choices=("genus", "species"), default="genus")
     parser.add_argument("--reference-split", default="train")
     parser.add_argument("--query-split", default="")
+    parser.add_argument(
+        "--all-reference-species",
+        action="store_true",
+        help="Use references for all train species instead of restricting to query species.",
+    )
     parser.add_argument("--top-k", type=int, nargs="+", default=[1, 3, 5])
     args = parser.parse_args()
 
@@ -91,6 +96,11 @@ def _build_eval_sets(
         query_config = _load_config(args.query_config)
         query_records = _load_records(query_config["dataset"])
         query_records = filter_records_by_split(query_records, args.query_split)
+        if not args.all_reference_species:
+            query_species = {record.species for record in query_records}
+            reference_records = [
+                record for record in reference_records if record.species in query_species
+            ]
         if args.max_species:
             reference_records = limit_records_by_species(
                 reference_records,

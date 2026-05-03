@@ -70,6 +70,9 @@ def select_reference_records(
     taxonomic_level: str,
     references_per_label: int,
 ) -> list[ImageRecord]:
+    if taxonomic_level == "genus":
+        return select_genus_references(records, references_per_genus=references_per_label)
+
     grouped: dict[str, list[ImageRecord]] = defaultdict(list)
     for record in sorted(
         records,
@@ -80,6 +83,39 @@ def select_reference_records(
     references: list[ImageRecord] = []
     for label in sorted(grouped):
         references.extend(grouped[label][:references_per_label])
+    return references
+
+
+def select_genus_references(
+    records: list[ImageRecord],
+    references_per_genus: int,
+) -> list[ImageRecord]:
+    """Select up to N references per genus while covering its species evenly."""
+
+    by_genus: dict[str, dict[str, list[ImageRecord]]] = defaultdict(lambda: defaultdict(list))
+    for record in sorted(records, key=lambda item: (item.genus, item.species, str(item.image_path))):
+        by_genus[record.genus][record.species].append(record)
+
+    references: list[ImageRecord] = []
+    for genus in sorted(by_genus):
+        species_groups = by_genus[genus]
+        cursors = {species: 0 for species in species_groups}
+        selected_for_genus: list[ImageRecord] = []
+        while len(selected_for_genus) < references_per_genus:
+            added = False
+            for species in sorted(species_groups):
+                cursor = cursors[species]
+                species_records = species_groups[species]
+                if cursor >= len(species_records):
+                    continue
+                selected_for_genus.append(species_records[cursor])
+                cursors[species] = cursor + 1
+                added = True
+                if len(selected_for_genus) >= references_per_genus:
+                    break
+            if not added:
+                break
+        references.extend(selected_for_genus)
     return references
 
 

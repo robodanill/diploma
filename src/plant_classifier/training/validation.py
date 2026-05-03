@@ -10,7 +10,7 @@ def validate_records_exist(records: list) -> None:
     raise FileNotFoundError(
         "Some metadata image paths do not exist. "
         "Check dataset.root in the selected config. "
-        "For paper reproduction use configs/leafscan_training.yaml; "
+        "For paper reproduction use configs/leafscan_paper60_training.yaml; "
         "for legacy Leaf archives use configs/smoke_training.yaml or configs/leaf_training.yaml.\n"
         f"Missing examples:\n{examples}"
     )

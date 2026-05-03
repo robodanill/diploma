@@ -20,8 +20,13 @@ The expected normalized metadata files are:
 ```text
 data/plantclef2015/leafscan_metadata_split.csv
 data/plantclef2015/leafscan_metadata.csv
+data/plantclef2015/leafscan_paper60_metadata.csv
 data/plantclef2015/test_leafscan_metadata.csv
 ```
+
+`leafscan_paper60_metadata.csv` is generated in the training notebook by filtering
+the official train LeafScan metadata to the 60 species present in the official test
+set. The strict paper config then samples six images per species from that pool.
 
 Required columns:
 
