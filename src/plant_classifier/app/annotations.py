@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import csv
 import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 
 from plant_classifier.inference.types import ImagePrediction, PredictionLabel
+
+METADATA_FILENAMES = ("metadata.csv", "metadata.scv")
+IMAGE_PATH_COLUMNS = ("image_path", "filename", "file_name", "image", "path")
 
 
 @dataclass(frozen=True)
@@ -30,12 +34,12 @@ class PredictionCorrectness:
 
 
 def load_ground_truth_label(image_path: Path) -> GroundTruthLabel | None:
-    """Load a PlantCLEF-style XML sidecar placed next to an image."""
+    """Load a label from an XML sidecar or folder metadata CSV."""
 
     annotation_path = _find_annotation_path(image_path)
-    if annotation_path is None:
-        return None
-    return parse_ground_truth_xml(annotation_path)
+    if annotation_path is not None:
+        return parse_ground_truth_xml(annotation_path)
+    return load_ground_truth_from_metadata(image_path)
 
 
 def parse_ground_truth_xml(annotation_path: Path) -> GroundTruthLabel | None:
@@ -52,6 +56,35 @@ def parse_ground_truth_xml(annotation_path: Path) -> GroundTruthLabel | None:
         genus=genus,
         species=species,
     )
+
+
+def load_ground_truth_from_metadata(image_path: Path) -> GroundTruthLabel | None:
+    metadata_path = _find_metadata_path(image_path.parent)
+    if metadata_path is None:
+        return None
+    return parse_ground_truth_metadata(metadata_path, image_path)
+
+
+def parse_ground_truth_metadata(
+    metadata_path: Path,
+    image_path: Path,
+) -> GroundTruthLabel | None:
+    with metadata_path.open("r", encoding="utf-8-sig", newline="") as file:
+        reader = csv.DictReader(file)
+        for raw_row in reader:
+            row = _clean_metadata_row(raw_row)
+            if not _metadata_row_matches(row, image_path, metadata_path.parent):
+                continue
+            genus = _first(row, "genus")
+            species = _first(row, "species", "specific_epithet")
+            if not genus or not species:
+                return None
+            return GroundTruthLabel(
+                family=_first(row, "family"),
+                genus=genus,
+                species=species,
+            )
+    return None
 
 
 def evaluate_prediction(
@@ -99,6 +132,14 @@ def _clean_tag(tag: str) -> str:
     return tag.rsplit("}", maxsplit=1)[-1].strip().lower().replace("-", "_")
 
 
+def _clean_metadata_row(row: dict[str, str]) -> dict[str, str]:
+    return {
+        _clean_tag(key or ""): (value or "").strip()
+        for key, value in row.items()
+        if key is not None
+    }
+
+
 def _find_annotation_path(image_path: Path) -> Path | None:
     annotation_path = image_path.with_suffix(".xml")
     if annotation_path.is_file():
@@ -110,3 +151,36 @@ def _find_annotation_path(image_path: Path) -> Path | None:
         if path.is_file() and path.stem.lower() == image_stem and path.suffix.lower() == ".xml":
             return path
     return None
+
+
+def _find_metadata_path(folder: Path) -> Path | None:
+    if not folder.is_dir():
+        return None
+    expected_names = set(METADATA_FILENAMES)
+    for path in folder.iterdir():
+        if path.is_file() and path.name.lower() in expected_names:
+            return path
+    return None
+
+
+def _metadata_row_matches(row: dict[str, str], image_path: Path, metadata_root: Path) -> bool:
+    value = _first(row, *IMAGE_PATH_COLUMNS)
+    if not value:
+        return False
+
+    candidate = Path(value)
+    resolved_candidate = candidate if candidate.is_absolute() else metadata_root / candidate
+    if _same_path(resolved_candidate, image_path):
+        return True
+    return not candidate.is_absolute() and len(candidate.parts) == 1 and _same_name(
+        candidate,
+        image_path,
+    )
+
+
+def _same_path(left: Path, right: Path) -> bool:
+    return left.resolve() == right.resolve()
+
+
+def _same_name(left: Path, right: Path) -> bool:
+    return left.name.lower() == right.name.lower()
