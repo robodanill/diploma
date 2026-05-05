@@ -112,6 +112,7 @@ def _apply_subset(records: list[ImageRecord], dataset_config: dict) -> list[Imag
         max_species=subset.get("max_species"),
         min_images_per_species=int(subset.get("min_images_per_species", 1)),
         max_images_per_species=subset.get("max_images_per_species"),
+        seed=subset.get("seed"),
     )
     print(f"using subset: {len(limited)} images from {len({record.species for record in limited})} species")
     return limited

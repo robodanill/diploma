@@ -130,19 +130,23 @@ def limit_records_by_species(
     max_species: int | None = None,
     min_images_per_species: int = 1,
     max_images_per_species: int | None = None,
+    seed: int | None = None,
 ) -> list[ImageRecord]:
-    """Select a deterministic species-balanced subset for smoke experiments."""
+    """Select a species-balanced subset, optionally sampling records by seed."""
 
     grouped: dict[str, list[ImageRecord]] = {}
     for record in sorted(records, key=lambda item: (item.species, str(item.image_path))):
         grouped.setdefault(record.species, []).append(record)
 
+    rng = random.Random(seed) if seed is not None else None
     selected: list[ImageRecord] = []
     species_seen = 0
     for species in sorted(grouped):
-        species_records = grouped[species]
+        species_records = list(grouped[species])
         if len(species_records) < min_images_per_species:
             continue
+        if rng is not None:
+            rng.shuffle(species_records)
         limit = max_images_per_species or len(species_records)
         selected.extend(species_records[:limit])
         species_seen += 1

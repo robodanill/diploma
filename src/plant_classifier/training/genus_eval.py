@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,6 +19,7 @@ class GenusEvalResult:
     queries: int
     references: int
     top_ks: tuple[int, ...]
+    score_mode: str = "comparator"
 
     @property
     def primary_top_k(self) -> int:
@@ -69,9 +71,14 @@ def select_reference_records(
     records: list[ImageRecord],
     taxonomic_level: str,
     references_per_label: int,
+    seed: int | None = None,
 ) -> list[ImageRecord]:
     if taxonomic_level == "genus":
-        return select_genus_references(records, references_per_genus=references_per_label)
+        return select_genus_references(
+            records,
+            references_per_genus=references_per_label,
+            seed=seed,
+        )
 
     grouped: dict[str, list[ImageRecord]] = defaultdict(list)
     for record in sorted(
@@ -80,15 +87,20 @@ def select_reference_records(
     ):
         grouped[record.label_for(taxonomic_level)].append(record)
 
+    rng = random.Random(seed) if seed is not None else None
     references: list[ImageRecord] = []
     for label in sorted(grouped):
-        references.extend(grouped[label][:references_per_label])
+        label_records = list(grouped[label])
+        if rng is not None:
+            rng.shuffle(label_records)
+        references.extend(label_records[:references_per_label])
     return references
 
 
 def select_genus_references(
     records: list[ImageRecord],
     references_per_genus: int,
+    seed: int | None = None,
 ) -> list[ImageRecord]:
     """Select up to N references per genus while covering its species evenly."""
 
@@ -96,14 +108,20 @@ def select_genus_references(
     for record in sorted(records, key=lambda item: (item.genus, item.species, str(item.image_path))):
         by_genus[record.genus][record.species].append(record)
 
+    rng = random.Random(seed) if seed is not None else None
     references: list[ImageRecord] = []
     for genus in sorted(by_genus):
         species_groups = by_genus[genus]
+        species_order = sorted(species_groups)
+        if rng is not None:
+            rng.shuffle(species_order)
+            for species in species_order:
+                rng.shuffle(species_groups[species])
         cursors = {species: 0 for species in species_groups}
         selected_for_genus: list[ImageRecord] = []
         while len(selected_for_genus) < references_per_genus:
             added = False
-            for species in sorted(species_groups):
+            for species in species_order:
                 cursor = cursors[species]
                 species_records = species_groups[species]
                 if cursor >= len(species_records):
@@ -129,9 +147,11 @@ def evaluate_genus_retrieval(
     top_ks: tuple[int, ...],
     device: torch.device,
     preprocessing: bool = False,
+    score_mode: str = "comparator",
 ) -> GenusEvalResult:
     if not references or not queries:
         raise ValueError("Not enough records to evaluate genus retrieval")
+    _validate_score_mode(score_mode)
 
     was_training = model.training
     model.eval()
@@ -150,7 +170,12 @@ def evaluate_genus_retrieval(
     hits = {top_k: 0 for top_k in top_ks}
     for query in queries:
         query_embedding = embed_image(model, query.image_path, transform, device)
-        ranked = rank_references(model, query_embedding, reference_embeddings)
+        ranked = rank_references(
+            model,
+            query_embedding,
+            reference_embeddings,
+            score_mode=score_mode,
+        )
         top_genera = [record.genus for record, _ in ranked[:max_top_k]]
         for top_k in top_ks:
             if query.genus in top_genera[:top_k]:
@@ -165,6 +190,7 @@ def evaluate_genus_retrieval(
         queries=len(queries),
         references=len(references),
         top_ks=top_ks,
+        score_mode=score_mode,
     )
 
 
@@ -178,10 +204,19 @@ def embed_image(model, image_path: Path, transform, device: torch.device):
     return model.embed(tensor)
 
 
-def rank_references(model, query_embedding, reference_embeddings):
+def rank_references(model, query_embedding, reference_embeddings, score_mode: str = "comparator"):
+    _validate_score_mode(score_mode)
     ranked = []
     for record, reference_embedding in reference_embeddings:
         distance = torch.abs(query_embedding - reference_embedding)
-        score = float(model.comparator(distance).flatten().item())
+        if score_mode == "comparator":
+            score = float(model.comparator(distance).flatten().item())
+        else:
+            score = float(distance.sum().item())
         ranked.append((record, score))
-    return sorted(ranked, key=lambda item: item[1], reverse=True)
+    return sorted(ranked, key=lambda item: item[1], reverse=score_mode == "comparator")
+
+
+def _validate_score_mode(score_mode: str) -> None:
+    if score_mode not in {"comparator", "l1"}:
+        raise ValueError(f"Unsupported score mode: {score_mode}")

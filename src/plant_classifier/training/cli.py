@@ -105,6 +105,7 @@ def _apply_subset(records: list, dataset_config: dict) -> list:
         max_species=subset.get("max_species"),
         min_images_per_species=int(subset.get("min_images_per_species", 1)),
         max_images_per_species=subset.get("max_images_per_species"),
+        seed=subset.get("seed"),
     )
     print(
         f"using subset: {len(limited)} images from {len({record.species for record in limited})} species",
@@ -169,12 +170,13 @@ def _build_eval_fn(config: dict, records: list, stage: str):
         return None
 
     top_ks = _parse_top_ks(evaluation_config.get("top_k", [1, 3, 5]))
+    score_mode = str(evaluation_config.get("score_mode", "comparator"))
     image_size = int(config["views"]["global"]["image_size"])
     crop_size = int(config["views"]["local"]["crop_size"])
     preprocessing = _preprocessing_enabled(config)
     print(
         f"genus eval enabled: references={len(references)} "
-        f"queries={len(queries)} top_k={top_ks}",
+        f"queries={len(queries)} top_k={top_ks} score_mode={score_mode}",
         flush=True,
     )
 
@@ -188,6 +190,7 @@ def _build_eval_fn(config: dict, records: list, stage: str):
             preprocessing=preprocessing,
             top_ks=top_ks,
             device=device,
+            score_mode=score_mode,
         )
 
     return eval_fn

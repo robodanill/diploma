@@ -269,6 +269,7 @@ def _format_epoch(
                     f"top{top_k}_genus_accuracy={eval_result.accuracies[top_k]:.3f}"
                     for top_k in eval_result.top_ks
                 ),
+                f"score_mode={eval_result.score_mode}",
                 f"best_top{eval_result.primary_top_k}={best_eval:.3f}",
                 f"eval={eval_result.hits[eval_result.primary_top_k]}/{eval_result.queries}",
             ]

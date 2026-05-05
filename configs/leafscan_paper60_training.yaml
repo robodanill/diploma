@@ -11,6 +11,7 @@ dataset:
   subset:
     min_images_per_species: 6
     max_images_per_species: 6
+    seed: 42
 
 views:
   global:

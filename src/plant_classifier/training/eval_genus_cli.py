@@ -31,7 +31,21 @@ def main() -> int:
     parser.add_argument("--queries-per-genus", type=int, default=2)
     parser.add_argument("--reference-level", choices=("genus", "species"), default="genus")
     parser.add_argument("--reference-split", default="train")
+    parser.add_argument(
+        "--reference-seed",
+        type=int,
+        help=(
+            "Seed random reference selection. Use this for paper-style random reference "
+            "sets while keeping runs reproducible."
+        ),
+    )
     parser.add_argument("--query-split", default="")
+    parser.add_argument(
+        "--score-mode",
+        choices=("comparator", "l1"),
+        default="comparator",
+        help="Use the learned S-CNN comparator or raw L1 embedding distance for diagnostics.",
+    )
     parser.add_argument(
         "--all-reference-species",
         action="store_true",
@@ -74,9 +88,14 @@ def main() -> int:
         top_ks=tuple(args.top_k),
         device=device,
         preprocessing=_preprocessing_enabled(config),
+        score_mode=args.score_mode,
     )
 
-    print(f"references={result.references} queries={result.queries} top_k={list(result.top_ks)}")
+    print(
+        f"references={result.references} queries={result.queries} "
+        f"top_k={list(result.top_ks)} score_mode={result.score_mode} "
+        f"reference_seed={args.reference_seed}"
+    )
     for top_k in result.top_ks:
         print(
             f"top{top_k}_genus_accuracy={result.accuracies[top_k]:.3f} "
@@ -112,6 +131,7 @@ def _build_eval_sets(
             reference_records,
             taxonomic_level=args.reference_level,
             references_per_label=args.references_per_genus,
+            seed=args.reference_seed,
         )
         return references, query_records
 
