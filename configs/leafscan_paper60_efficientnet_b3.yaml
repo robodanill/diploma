@@ -12,6 +12,18 @@ dataset:
     min_images_per_species: 6
     max_images_per_species: 6
     seed: 42
+    by_stage:
+      genus:
+        level: genus
+        min_images_per_label: 6
+        max_images_per_label: 6
+        seed: 42
+        cover_species: true
+      species:
+        level: species
+        min_images_per_label: 6
+        max_images_per_label: 6
+        seed: 42
 
 views:
   global:

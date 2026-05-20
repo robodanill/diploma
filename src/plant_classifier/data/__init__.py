@@ -3,6 +3,7 @@
 from plant_classifier.data.metadata import (
     create_species_stratified_split,
     filter_records_by_split,
+    limit_records_by_genus,
     limit_records_by_species,
     load_metadata_csv,
     write_metadata_csv,
@@ -16,6 +17,7 @@ __all__ = [
     "build_plantclef_metadata",
     "create_species_stratified_split",
     "filter_records_by_split",
+    "limit_records_by_genus",
     "limit_records_by_species",
     "load_metadata_csv",
     "sample_pairs",

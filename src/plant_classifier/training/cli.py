@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 
 from plant_classifier.data import (
     filter_records_by_split,
+    limit_records_by_genus,
     limit_records_by_species,
     load_metadata_csv,
     sample_pairs,
@@ -38,7 +39,7 @@ def main() -> int:
     )
     validate_records_exist(records)
     train_records = filter_records_by_split(records, config["training"].get("split", "train"))
-    train_records = _apply_subset(train_records, dataset_config)
+    train_records = _apply_subset(train_records, dataset_config, stage=args.stage)
     validate_records_exist(train_records)
     print(
         f"training split={config['training'].get('split', 'train')} "
@@ -97,10 +98,20 @@ def _load_config(path: Path) -> dict:
         return yaml.safe_load(file)
 
 
-def _apply_subset(records: list, dataset_config: dict) -> list:
+def _apply_subset(records: list, dataset_config: dict, stage: str) -> list:
     subset = dataset_config.get("subset")
     if not subset:
         return records
+    stage_subset = subset.get("by_stage", {}).get(stage)
+    if stage_subset:
+        level = str(stage_subset.get("level", stage))
+        limited = _apply_stage_subset(records, stage_subset, level)
+        print(
+            f"using {stage} subset by {level}: {len(limited)} images "
+            f"from {len({record.label_for(level) for record in limited})} {level} labels",
+            flush=True,
+        )
+        return limited
     limited = limit_records_by_species(
         records,
         max_species=subset.get("max_species"),
@@ -113,6 +124,27 @@ def _apply_subset(records: list, dataset_config: dict) -> list:
         flush=True,
     )
     return limited
+
+
+def _apply_stage_subset(records: list, subset: dict, level: str) -> list:
+    if level == "genus":
+        return limit_records_by_genus(
+            records,
+            max_genera=subset.get("max_labels", subset.get("max_genera")),
+            min_images_per_genus=int(subset.get("min_images_per_label", 1)),
+            max_images_per_genus=subset.get("max_images_per_label"),
+            seed=subset.get("seed"),
+            cover_species=bool(subset.get("cover_species", True)),
+        )
+    if level == "species":
+        return limit_records_by_species(
+            records,
+            max_species=subset.get("max_labels", subset.get("max_species")),
+            min_images_per_species=int(subset.get("min_images_per_label", 1)),
+            max_images_per_species=subset.get("max_images_per_label"),
+            seed=subset.get("seed"),
+        )
+    raise ValueError(f"Unsupported subset level for training: {level}")
 
 
 def _train_static_pairs(config: dict, records: list, stage: str, view: str, model, output: Path) -> None:
