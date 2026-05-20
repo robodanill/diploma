@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PIL import Image, ImageFilter, ImageOps
+from PIL import Image, ImageChops, ImageFilter, ImageOps
 
 
 def center_crop_box(width: int, height: int, crop_size: int) -> tuple[int, int, int, int]:
@@ -18,7 +18,7 @@ def center_crop_box(width: int, height: int, crop_size: int) -> tuple[int, int, 
 
 
 class LeafBoundingBoxCrop:
-    """Crop the image to a foreground leaf mask estimated with Otsu thresholding."""
+    """Crop to the Otsu foreground after top-hat-style morphology cleanup."""
 
     def __init__(self, padding: int = 4, morphology_size: int = 5) -> None:
         self.padding = max(0, int(padding))
@@ -48,10 +48,15 @@ def _leaf_mask(image: Image.Image, morphology_size: int) -> Image.Image:
     light_foreground = grayscale.point(lambda value: 255 if value > threshold else 0, mode="L")
     mask = _choose_foreground_mask(dark_foreground, light_foreground, grayscale.width * grayscale.height)
     if morphology_size > 1:
-        # Opening removes small disconnected objects before computing the leaf bbox.
-        mask = mask.filter(ImageFilter.MinFilter(morphology_size))
-        mask = mask.filter(ImageFilter.MaxFilter(morphology_size))
+        mask = _remove_tophat_artifacts(mask, morphology_size)
     return mask
+
+
+def _remove_tophat_artifacts(mask: Image.Image, morphology_size: int) -> Image.Image:
+    opened = mask.filter(ImageFilter.MinFilter(morphology_size))
+    opened = opened.filter(ImageFilter.MaxFilter(morphology_size))
+    top_hat = ImageChops.subtract(mask, opened)
+    return ImageChops.subtract(mask, top_hat)
 
 
 def _choose_foreground_mask(dark_mask: Image.Image, light_mask: Image.Image, pixel_count: int) -> Image.Image:

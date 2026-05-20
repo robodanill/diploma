@@ -16,7 +16,11 @@ from plant_classifier.data import (
 )
 from plant_classifier.inference.scnn import TwoStageSiamesePredictor
 from plant_classifier.models.siamese import BackboneSpec, build_siamese_network
-from plant_classifier.training.genus_eval import select_genus_references
+from plant_classifier.training.genus_eval import (
+    describe_genus_reference_coverage,
+    describe_species_per_genus,
+    select_genus_references,
+)
 from plant_classifier.training.species_eval import (
     SpeciesEvalItem,
     SpeciesEvalResult,
@@ -179,6 +183,11 @@ def main() -> int:
     print("query species distribution:", describe_species_distribution(query_records))
     print("genus reference distribution:", _describe_genus_distribution(genus_references))
     print("species reference distribution:", describe_species_distribution(species_references))
+    print("reference pool species per genus:", describe_species_per_genus(selected_reference_records))
+    print(
+        "genus reference species coverage:",
+        describe_genus_reference_coverage(selected_reference_records, genus_references),
+    )
     if args.output_dir:
         _write_eval_artifacts(result, args.output_dir)
     return 0

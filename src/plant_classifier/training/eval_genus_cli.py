@@ -15,6 +15,8 @@ from plant_classifier.data import (
 from plant_classifier.models.siamese import BackboneSpec, build_siamese_network
 from plant_classifier.training.genus_eval import (
     describe_genus_distribution,
+    describe_genus_reference_coverage,
+    describe_species_per_genus,
     evaluate_genus_retrieval,
     select_reference_records,
     split_references_and_queries,
@@ -63,7 +65,8 @@ def main() -> int:
     config = _load_config(args.config)
     dataset_config = config["dataset"]
     records = _load_records(dataset_config)
-    references, queries = _build_eval_sets(records, args)
+    records = _apply_subset(records, dataset_config)
+    references, queries, reference_pool = _build_eval_sets(records, args)
     if not references or not queries:
         print(
             "genus eval skipped: not enough records to create references and queries "
@@ -103,13 +106,18 @@ def main() -> int:
         )
     print("query genus distribution:", describe_genus_distribution(queries))
     print("reference genus distribution:", describe_genus_distribution(references))
+    print("reference pool species per genus:", describe_species_per_genus(reference_pool))
+    print(
+        "genus reference species coverage:",
+        describe_genus_reference_coverage(reference_pool, references),
+    )
     return 0
 
 
 def _build_eval_sets(
     records: list[ImageRecord],
     args,
-) -> tuple[list[ImageRecord], list[ImageRecord]]:
+) -> tuple[list[ImageRecord], list[ImageRecord], list[ImageRecord]]:
     if args.query_config:
         reference_records = filter_records_by_split(records, args.reference_split)
         query_config = _load_config(args.query_config)
@@ -133,7 +141,7 @@ def _build_eval_sets(
             references_per_label=args.references_per_genus,
             seed=args.reference_seed,
         )
-        return references, query_records
+        return references, query_records, reference_records
 
     if args.max_species:
         records = limit_records_by_species(
@@ -143,11 +151,12 @@ def _build_eval_sets(
             max_images_per_species=args.references_per_genus + args.queries_per_genus,
         )
 
-    return split_references_and_queries(
+    references, queries = split_references_and_queries(
         records,
         references_per_genus=args.references_per_genus,
         queries_per_genus=args.queries_per_genus,
     )
+    return references, queries, records
 
 
 def _load_config(path: Path) -> dict:
@@ -164,6 +173,25 @@ def _load_records(dataset_config: dict) -> list[ImageRecord]:
         genus_column=dataset_config["genus_column"],
         species_column=dataset_config["species_column"],
     )
+
+
+def _apply_subset(records: list[ImageRecord], dataset_config: dict) -> list[ImageRecord]:
+    subset = dataset_config.get("subset")
+    if not subset:
+        return records
+    limited = limit_records_by_species(
+        records,
+        max_species=subset.get("max_species"),
+        min_images_per_species=int(subset.get("min_images_per_species", 1)),
+        max_images_per_species=subset.get("max_images_per_species"),
+        seed=subset.get("seed"),
+    )
+    print(
+        f"using reference subset: {len(limited)} images "
+        f"from {len({record.species for record in limited})} species",
+        flush=True,
+    )
+    return limited
 
 
 def _preprocessing_enabled(config: dict) -> bool:

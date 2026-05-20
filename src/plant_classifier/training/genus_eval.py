@@ -198,6 +198,43 @@ def describe_genus_distribution(records: list[ImageRecord], limit: int = 10) -> 
     return dict(Counter(record.genus for record in records).most_common(limit))
 
 
+def describe_species_per_genus(records: list[ImageRecord], limit: int = 10) -> dict[str, int]:
+    species_by_genus: dict[str, set[str]] = defaultdict(set)
+    for record in records:
+        species_by_genus[record.genus].add(record.species)
+    ranked = sorted(
+        species_by_genus.items(),
+        key=lambda item: (-len(item[1]), item[0]),
+    )
+    return {genus: len(species) for genus, species in ranked[:limit]}
+
+
+def describe_genus_reference_coverage(
+    reference_pool: list[ImageRecord],
+    references: list[ImageRecord],
+    limit: int = 10,
+) -> dict[str, str]:
+    pool_species_by_genus: dict[str, set[str]] = defaultdict(set)
+    reference_species_by_genus: dict[str, set[str]] = defaultdict(set)
+    for record in reference_pool:
+        pool_species_by_genus[record.genus].add(record.species)
+    for record in references:
+        reference_species_by_genus[record.genus].add(record.species)
+
+    ranked = sorted(
+        pool_species_by_genus,
+        key=lambda genus: (
+            len(reference_species_by_genus[genus]) / max(1, len(pool_species_by_genus[genus])),
+            -len(pool_species_by_genus[genus]),
+            genus,
+        ),
+    )
+    return {
+        genus: f"{len(reference_species_by_genus[genus])}/{len(pool_species_by_genus[genus])}"
+        for genus in ranked[:limit]
+    }
+
+
 def embed_image(model, image_path: Path, transform, device: torch.device):
     with Image.open(image_path) as image:
         tensor = transform(image.convert("RGB")).unsqueeze(0).to(device)
