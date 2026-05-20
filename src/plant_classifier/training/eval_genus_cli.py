@@ -53,6 +53,11 @@ def main() -> int:
         action="store_true",
         help="Use references for all train species instead of restricting to query species.",
     )
+    parser.add_argument(
+        "--use-full-reference-pool",
+        action="store_true",
+        help="Do not apply the config six-shot subset to reference records.",
+    )
     parser.add_argument("--top-k", type=int, nargs="+", default=[1, 3, 5])
     args = parser.parse_args()
 
@@ -65,7 +70,8 @@ def main() -> int:
     config = _load_config(args.config)
     dataset_config = config["dataset"]
     records = _load_records(dataset_config)
-    records = _apply_subset(records, dataset_config)
+    if not args.use_full_reference_pool:
+        records = _apply_subset(records, dataset_config)
     references, queries, reference_pool = _build_eval_sets(records, args)
     if not references or not queries:
         print(
