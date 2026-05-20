@@ -1,17 +1,17 @@
 seed: 42
 
 dataset:
-  name: PlantCLEF2015LeafScanSmokeEfficientNetB3
+  name: PlantCLEF2015LeafScanPaper60MobileNetV3Large
   root: data/plantclef2015/leafscan
-  metadata: data/plantclef2015/leafscan_metadata_split.csv
+  metadata: data/plantclef2015/leafscan_paper60_metadata.csv
   image_column: image_path
   family_column: family
   genus_column: genus
   species_column: species
   subset:
-    max_species: 20
-    min_images_per_species: 4
+    min_images_per_species: 6
     max_images_per_species: 6
+    seed: 42
 
 views:
   global:
@@ -26,25 +26,27 @@ preprocessing:
   leaf_bbox: true
 
 pair_sampling:
+  strategy: pair_uniform
   positive_per_epoch:
-    genus: 80
-    species: 120
+    genus: 400
+    species: 800
   negative_per_epoch:
-    genus: 120
-    species: 180
+    genus: 600
+    species: 1200
+  hard_negative_ratio: 0.0
 
 model:
-  backbone: efficientnet_b3
+  backbone: mobilenet_v3_large
   pretrained: true
-  embedding_dim: 4096
+  embedding_dim: 1280
   distance: l1
 
 training:
-  batch_size: 16
+  batch_size: 32
   dynamic_pairs: true
-  epochs: 1
+  epochs: 80
+  max_iterations: 2048
   num_workers: 2
-  progress_every_batches: 5
   optimizer: sgd
   learning_rate: 0.001
   momentum: 0.9
@@ -54,13 +56,9 @@ training:
 
 evaluation:
   enabled: false
-  max_species: 40
-  references_per_genus: 2
-  queries_per_genus: 2
-  split: val
-  top_k: [1, 3, 5]
 
 inference:
-  references_per_class: 2
-  genus_candidates: 10
+  references_per_class: 6
+  reference_split: train
+  genus_candidates: 30
   top_k: 5
