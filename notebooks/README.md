@@ -26,8 +26,7 @@ data/plantclef2015/test_leafscan_metadata.csv
 
 `leafscan_paper60_metadata.csv` is generated in the training notebook by filtering
 the official train LeafScan metadata to the 60 species present in the official test
-set. The strict paper config samples S-CNN (A) by genus and S-CNN (B) by species
-from that pool.
+set. The strict paper config then samples six images per species from that pool.
 
 Required columns:
 
