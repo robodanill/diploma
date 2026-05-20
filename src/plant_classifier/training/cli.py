@@ -71,6 +71,7 @@ def main() -> int:
             positive_count=int(config["pair_sampling"]["positive_per_epoch"][stage]),
             negative_count=int(config["pair_sampling"]["negative_per_epoch"][stage]),
             hard_negative_ratio=float(config["pair_sampling"].get("hard_negative_ratio", 0.0)),
+            pair_sampling_strategy=str(config["pair_sampling"].get("strategy", "label_uniform")),
             image_size=int(config["views"][view]["image_size"]),
             crop_size=int(config["views"].get("local", {}).get("crop_size", 32)),
             preprocessing=_preprocessing_enabled(config),
@@ -121,6 +122,7 @@ def _train_static_pairs(config: dict, records: list, stage: str, view: str, mode
         positive_count=int(config["pair_sampling"]["positive_per_epoch"][stage]),
         negative_count=int(config["pair_sampling"]["negative_per_epoch"][stage]),
         hard_negative_ratio=float(config["pair_sampling"].get("hard_negative_ratio", 0.0)),
+        strategy=str(config["pair_sampling"].get("strategy", "label_uniform")),
         seed=int(config["seed"]),
     )
     dataset = PairImageDataset(

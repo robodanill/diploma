@@ -94,6 +94,7 @@ def train_siamese_with_dynamic_pairs(
     positive_count: int,
     negative_count: int,
     hard_negative_ratio: float = 0.0,
+    pair_sampling_strategy: str = "label_uniform",
     image_size: int = 224,
     crop_size: int = 32,
     preprocessing: bool = False,
@@ -138,10 +139,12 @@ def train_siamese_with_dynamic_pairs(
             negative_count=negative_count,
             hard_negative_ratio=hard_negative_ratio,
             seed=seed + epoch,
+            strategy=pair_sampling_strategy,
         )
         print(
             f"epoch={epoch + 1} sampled_pairs={len(pairs)} "
-            f"batch_size={batch_size} device={resolved_device}",
+            f"sampling={pair_sampling_strategy} batch_size={batch_size} "
+            f"device={resolved_device}",
             flush=True,
         )
         dataset = PairImageDataset(

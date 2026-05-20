@@ -45,3 +45,58 @@ def test_sample_pairs_can_create_hard_negative_pairs_within_family() -> None:
         right = records_by_path[pair.right]
         assert left.family == right.family
         assert left.genus != right.genus
+
+
+def test_pair_uniform_sampling_weights_larger_positive_pair_pools() -> None:
+    records = [
+        ImageRecord(Path("g1_a.jpg"), "F1", "G1", "S1"),
+        ImageRecord(Path("g1_b.jpg"), "F1", "G1", "S1"),
+        ImageRecord(Path("g1_c.jpg"), "F1", "G1", "S2"),
+        ImageRecord(Path("g1_d.jpg"), "F1", "G1", "S2"),
+        ImageRecord(Path("g2_a.jpg"), "F1", "G2", "S3"),
+        ImageRecord(Path("g2_b.jpg"), "F1", "G2", "S3"),
+    ]
+
+    pairs = sample_pairs(
+        records,
+        "genus",
+        positive_count=100,
+        negative_count=0,
+        seed=7,
+        strategy="pair_uniform",
+    )
+
+    records_by_path = {record.image_path: record for record in records}
+    positive_genus_counts = {"G1": 0, "G2": 0}
+    for pair in pairs:
+        left = records_by_path[pair.left]
+        right = records_by_path[pair.right]
+        assert left.genus == right.genus
+        positive_genus_counts[left.genus] += 1
+
+    assert positive_genus_counts["G1"] > positive_genus_counts["G2"]
+
+
+def test_pair_uniform_sampling_creates_valid_negative_pairs() -> None:
+    records = [
+        ImageRecord(Path("a1.jpg"), "F1", "G1", "S1"),
+        ImageRecord(Path("a2.jpg"), "F1", "G1", "S1"),
+        ImageRecord(Path("b1.jpg"), "F1", "G2", "S2"),
+        ImageRecord(Path("b2.jpg"), "F1", "G2", "S2"),
+    ]
+
+    pairs = sample_pairs(
+        records,
+        "genus",
+        positive_count=0,
+        negative_count=20,
+        seed=3,
+        strategy="pair_uniform",
+    )
+
+    records_by_path = {record.image_path: record for record in records}
+    assert len(pairs) == 20
+    for pair in pairs:
+        left = records_by_path[pair.left]
+        right = records_by_path[pair.right]
+        assert left.genus != right.genus

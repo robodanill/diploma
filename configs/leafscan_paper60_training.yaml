@@ -26,6 +26,7 @@ preprocessing:
   leaf_bbox: true
 
 pair_sampling:
+  strategy: pair_uniform
   positive_per_epoch:
     genus: 400
     species: 800
