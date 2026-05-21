@@ -85,6 +85,14 @@ def main() -> int:
         default=["max"],
     )
     parser.add_argument("--all-reference-species", action="store_true")
+    parser.add_argument(
+        "--include-gold-genus-oracle",
+        action="store_true",
+        help=(
+            "Also evaluate S-CNN(B) after replacing the genus gate with the true query genus. "
+            "This isolates species-stage quality from S-CNN(A) mistakes."
+        ),
+    )
     parser.add_argument("--top-k", type=int, nargs="+", default=[1, 3, 5])
     parser.add_argument("--output-csv", type=Path)
     parser.add_argument("--print-top", type=int, default=20)
@@ -236,6 +244,23 @@ def main() -> int:
                         top_ks=top_ks,
                     )
                     rows.append(row)
+    if args.include_gold_genus_oracle:
+        for species_score_mode in args.species_score_modes:
+            for species_aggregation in args.species_aggregations:
+                row = _evaluate_combo(
+                    query_records=tuple(query_records),
+                    genus_references=genus_reference_embeddings.records,
+                    species_references=species_reference_embeddings.records,
+                    genus_scores=next(iter(genus_scores.values())),
+                    species_scores=species_scores[species_score_mode],
+                    genus_candidates=0,
+                    genus_score_mode="gold",
+                    species_score_mode=species_score_mode,
+                    species_aggregation=species_aggregation,
+                    top_ks=top_ks,
+                    use_gold_genus=True,
+                )
+                rows.append(row)
 
     rows = sorted(
         rows,
@@ -390,6 +415,7 @@ def _evaluate_combo(
     species_score_mode: str,
     species_aggregation: str,
     top_ks: tuple[int, ...],
+    use_gold_genus: bool = False,
 ) -> dict[str, object]:
     hits = {top_k: 0 for top_k in top_ks}
     inverse_rank_sum = 0.0
@@ -397,10 +423,16 @@ def _evaluate_combo(
     misses_without_candidate_genus = 0
 
     for query_index, query in enumerate(query_records):
-        ranked_genus_indices = torch.argsort(genus_scores[query_index], descending=True).tolist()
-        candidate_indices = ranked_genus_indices[:genus_candidates]
-        selected_genera = [genus_references[index].genus for index in candidate_indices]
-        genus_weights = Counter(selected_genera)
+        if use_gold_genus:
+            genus_weights = Counter({query.genus: 1})
+        else:
+            ranked_genus_indices = torch.argsort(
+                genus_scores[query_index],
+                descending=True,
+            ).tolist()
+            candidate_indices = ranked_genus_indices[:genus_candidates]
+            selected_genera = [genus_references[index].genus for index in candidate_indices]
+            genus_weights = Counter(selected_genera)
         candidate_genera = set(genus_weights)
         if query.genus in candidate_genera:
             genus_gate_hits += 1
@@ -440,6 +472,7 @@ def _evaluate_combo(
 
     query_count = len(query_records)
     row: dict[str, object] = {
+        "candidate_mode": "gold_genus" if use_gold_genus else "ranked_genus",
         "genus_candidates": genus_candidates,
         "genus_score_mode": genus_score_mode,
         "species_score_mode": species_score_mode,
@@ -482,6 +515,7 @@ def _print_rows(rows: list[dict[str, object]], top_ks: tuple[int, ...], limit: i
     for row in rows[:limit]:
         topk_text = " ".join(f"top{top_k}={float(row[f'top{top_k}']):.3f}" for top_k in top_ks)
         print(
+            f"candidate_mode={row['candidate_mode']} "
             f"genus_candidates={row['genus_candidates']} "
             f"genus_score_mode={row['genus_score_mode']} "
             f"species_score_mode={row['species_score_mode']} "
