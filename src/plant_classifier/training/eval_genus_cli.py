@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import csv
+from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
 
 import torch
@@ -18,9 +21,22 @@ from plant_classifier.training.genus_eval import (
     describe_genus_reference_coverage,
     describe_species_per_genus,
     evaluate_genus_retrieval,
+    embed_image,
+    rank_references,
     select_reference_records,
     split_references_and_queries,
 )
+
+
+@dataclass(frozen=True)
+class GenusEvalItem:
+    image_path: str
+    expected_genus: str
+    expected_species: str
+    predicted_genus: str
+    predicted_species: str
+    predicted_score: float
+    rank: int | None
 
 
 def main() -> int:
@@ -59,6 +75,11 @@ def main() -> int:
         help="Do not apply the config six-shot subset to reference records.",
     )
     parser.add_argument("--top-k", type=int, nargs="+", default=[1, 3, 5])
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        help="Write genus predictions, confusion matrix, and diagnostic plots.",
+    )
     args = parser.parse_args()
 
     if not args.checkpoint.exists():
@@ -117,6 +138,19 @@ def main() -> int:
         "genus reference species coverage:",
         describe_genus_reference_coverage(reference_pool, references),
     )
+    if args.output_dir:
+        _write_eval_artifacts(
+            model=model,
+            references=references,
+            queries=queries,
+            image_size=int(config["views"]["global"]["image_size"]),
+            crop_size=int(config["views"]["local"]["crop_size"]),
+            top_ks=tuple(args.top_k),
+            device=device,
+            preprocessing=_preprocessing_enabled(config),
+            score_mode=args.score_mode,
+            output_dir=args.output_dir,
+        )
     return 0
 
 
@@ -203,6 +237,239 @@ def _apply_subset(records: list[ImageRecord], dataset_config: dict) -> list[Imag
 def _preprocessing_enabled(config: dict) -> bool:
     preprocessing = config.get("preprocessing", {})
     return bool(preprocessing.get("enabled", preprocessing.get("leaf_bbox", False)))
+
+
+@torch.inference_mode()
+def _write_eval_artifacts(
+    model,
+    references: list[ImageRecord],
+    queries: list[ImageRecord],
+    image_size: int,
+    crop_size: int,
+    top_ks: tuple[int, ...],
+    device: torch.device,
+    preprocessing: bool,
+    score_mode: str,
+    output_dir: Path,
+) -> None:
+    from plant_classifier.training.image_pairs import build_image_transform
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    top_ks = tuple(sorted(set(top_ks)))
+    transform = build_image_transform(
+        "global",
+        image_size=image_size,
+        crop_size=crop_size,
+        preprocessing=preprocessing,
+    )
+    reference_embeddings = [
+        (record, embed_image(model, record.image_path, transform, device)) for record in references
+    ]
+    items: list[GenusEvalItem] = []
+    hits = {top_k: 0 for top_k in top_ks}
+    for query in queries:
+        query_embedding = embed_image(model, query.image_path, transform, device)
+        ranked = rank_references(
+            model,
+            query_embedding,
+            reference_embeddings,
+            score_mode=score_mode,
+        )
+        rank = _rank_of_genus(query.genus, [record.genus for record, _score in ranked])
+        for top_k in top_ks:
+            if rank is not None and rank <= top_k:
+                hits[top_k] += 1
+        top_record, top_score = ranked[0]
+        items.append(
+            GenusEvalItem(
+                image_path=str(query.image_path),
+                expected_genus=query.genus,
+                expected_species=query.species,
+                predicted_genus=top_record.genus,
+                predicted_species=top_record.species,
+                predicted_score=float(top_score),
+                rank=rank,
+            )
+        )
+
+    labels, matrix = _confusion_matrix(items)
+    _write_predictions_csv(items, output_dir / "genus_predictions.csv", top_ks)
+    _write_confusion_csv(labels, matrix, output_dir / "genus_confusion_matrix.csv")
+    _write_summary_csv(
+        hits=hits,
+        top_ks=top_ks,
+        queries=len(queries),
+        references=len(references),
+        score_mode=score_mode,
+        output_path=output_dir / "genus_eval_summary.csv",
+    )
+    _plot_topk_accuracy(hits, top_ks, len(queries), output_dir / "topk_genus_accuracy.png")
+    _plot_rank_histogram(items, output_dir / "genus_rank_histogram.png")
+    _plot_per_genus_accuracy(items, output_dir / "per_genus_top1_accuracy.png")
+    _plot_confusion_matrix(labels, matrix, output_dir / "genus_confusion_matrix.png")
+    print(f"saved genus eval artifacts to {output_dir}")
+
+
+def _rank_of_genus(expected_genus: str, ranked_genera: list[str]) -> int | None:
+    for index, genus in enumerate(ranked_genera, start=1):
+        if genus == expected_genus:
+            return index
+    return None
+
+
+def _write_predictions_csv(
+    items: list[GenusEvalItem],
+    output_path: Path,
+    top_ks: tuple[int, ...],
+) -> None:
+    fieldnames = [
+        "image_path",
+        "expected_genus",
+        "expected_species",
+        "predicted_genus",
+        "predicted_species",
+        "predicted_score",
+        "rank",
+        *[f"hit_top{top_k}" for top_k in top_ks],
+    ]
+    with output_path.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer.writeheader()
+        for item in items:
+            row = {
+                "image_path": item.image_path,
+                "expected_genus": item.expected_genus,
+                "expected_species": item.expected_species,
+                "predicted_genus": item.predicted_genus,
+                "predicted_species": item.predicted_species,
+                "predicted_score": item.predicted_score,
+                "rank": item.rank or "",
+            }
+            for top_k in top_ks:
+                row[f"hit_top{top_k}"] = int(item.rank is not None and item.rank <= top_k)
+            writer.writerow(row)
+
+
+def _confusion_matrix(items: list[GenusEvalItem]) -> tuple[list[str], list[list[int]]]:
+    labels = sorted(
+        {
+            label
+            for item in items
+            for label in (item.expected_genus, item.predicted_genus or "<none>")
+        }
+    )
+    label_to_index = {label: index for index, label in enumerate(labels)}
+    matrix = [[0 for _ in labels] for _ in labels]
+    for item in items:
+        expected_index = label_to_index[item.expected_genus]
+        predicted_index = label_to_index[item.predicted_genus or "<none>"]
+        matrix[expected_index][predicted_index] += 1
+    return labels, matrix
+
+
+def _write_confusion_csv(labels: list[str], matrix: list[list[int]], output_path: Path) -> None:
+    with output_path.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.writer(file)
+        writer.writerow(["expected\\predicted", *labels])
+        for label, row in zip(labels, matrix, strict=True):
+            writer.writerow([label, *row])
+
+
+def _write_summary_csv(
+    hits: dict[int, int],
+    top_ks: tuple[int, ...],
+    queries: int,
+    references: int,
+    score_mode: str,
+    output_path: Path,
+) -> None:
+    with output_path.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.writer(file)
+        writer.writerow(["metric", "value"])
+        writer.writerow(["queries", queries])
+        writer.writerow(["references", references])
+        writer.writerow(["score_mode", score_mode])
+        for top_k in top_ks:
+            writer.writerow([f"top{top_k}_genus_accuracy", f"{hits[top_k] / queries:.6f}"])
+
+
+def _plot_topk_accuracy(
+    hits: dict[int, int],
+    top_ks: tuple[int, ...],
+    queries: int,
+    output_path: Path,
+) -> None:
+    import matplotlib.pyplot as plt
+
+    values = [hits[top_k] / queries for top_k in top_ks]
+    figure, axis = plt.subplots(figsize=(6, 4))
+    axis.bar([f"top-{top_k}" for top_k in top_ks], values, color="#2563eb")
+    axis.set_ylim(0, 1)
+    axis.set_ylabel("accuracy")
+    axis.set_title("Genus top-k accuracy")
+    for index, value in enumerate(values):
+        axis.text(index, value + 0.02, f"{value:.3f}", ha="center")
+    figure.tight_layout()
+    figure.savefig(output_path, dpi=180)
+    plt.close(figure)
+
+
+def _plot_rank_histogram(items: list[GenusEvalItem], output_path: Path) -> None:
+    import matplotlib.pyplot as plt
+
+    ranks = [item.rank for item in items if item.rank is not None]
+    missed = sum(1 for item in items if item.rank is None)
+    figure, axis = plt.subplots(figsize=(7, 4))
+    if ranks:
+        axis.hist(ranks, bins=range(1, max(ranks) + 2), color="#059669", edgecolor="white")
+    axis.set_xlabel("rank of first correct-genus reference")
+    axis.set_ylabel("queries")
+    axis.set_title(f"Correct genus rank distribution; missed={missed}")
+    figure.tight_layout()
+    figure.savefig(output_path, dpi=180)
+    plt.close(figure)
+
+
+def _plot_per_genus_accuracy(items: list[GenusEvalItem], output_path: Path) -> None:
+    import matplotlib.pyplot as plt
+
+    totals: Counter[str] = Counter(item.expected_genus for item in items)
+    hits: Counter[str] = Counter(
+        item.expected_genus
+        for item in items
+        if item.rank is not None and item.rank == 1
+    )
+    genera = sorted(totals, key=lambda label: (hits[label] / totals[label], totals[label], label))
+    values = [hits[label] / totals[label] for label in genera]
+    figure, axis = plt.subplots(figsize=(max(9, len(genera) * 0.24), 5))
+    axis.bar(range(len(genera)), values, color="#f59e0b")
+    axis.set_ylim(0, 1)
+    axis.set_ylabel("top-1 accuracy")
+    axis.set_title("Per-genus top-1 accuracy")
+    axis.set_xticks(range(len(genera)))
+    axis.set_xticklabels(genera, rotation=90, fontsize=6)
+    figure.tight_layout()
+    figure.savefig(output_path, dpi=180)
+    plt.close(figure)
+
+
+def _plot_confusion_matrix(labels: list[str], matrix: list[list[int]], output_path: Path) -> None:
+    import matplotlib.pyplot as plt
+
+    figure_size = max(9, len(labels) * 0.24)
+    figure, axis = plt.subplots(figsize=(figure_size, figure_size))
+    image = axis.imshow(matrix, cmap="Blues")
+    axis.set_title("Genus confusion matrix")
+    axis.set_xlabel("predicted")
+    axis.set_ylabel("expected")
+    axis.set_xticks(range(len(labels)))
+    axis.set_yticks(range(len(labels)))
+    axis.set_xticklabels(labels, rotation=90, fontsize=6)
+    axis.set_yticklabels(labels, fontsize=6)
+    figure.colorbar(image, ax=axis, fraction=0.046, pad=0.04)
+    figure.tight_layout()
+    figure.savefig(output_path, dpi=180)
+    plt.close(figure)
 
 
 if __name__ == "__main__":
