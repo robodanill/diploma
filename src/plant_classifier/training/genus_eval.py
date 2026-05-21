@@ -235,12 +235,14 @@ def describe_genus_reference_coverage(
     }
 
 
+@torch.inference_mode()
 def embed_image(model, image_path: Path, transform, device: torch.device):
     with Image.open(image_path) as image:
         tensor = transform(image.convert("RGB")).unsqueeze(0).to(device)
     return model.embed(tensor)
 
 
+@torch.inference_mode()
 def rank_references(model, query_embedding, reference_embeddings, score_mode: str = "comparator"):
     _validate_score_mode(score_mode)
     ranked = []
