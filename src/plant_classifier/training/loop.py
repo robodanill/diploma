@@ -144,6 +144,7 @@ def train_siamese_with_dynamic_pairs(
         print(
             f"epoch={epoch + 1} sampled_pairs={len(pairs)} "
             f"sampling={pair_sampling_strategy} batch_size={batch_size} "
+            f"hard_negative_ratio={hard_negative_ratio:.2f} "
             f"device={resolved_device}",
             flush=True,
         )

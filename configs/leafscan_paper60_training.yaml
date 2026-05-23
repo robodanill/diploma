@@ -33,7 +33,9 @@ pair_sampling:
   negative_per_epoch:
     genus: 600
     species: 1200
-  hard_negative_ratio: 0.0
+  hard_negative_ratio:
+    genus: 0.25
+    species: 0.60
 
 model:
   backbone: vgg16
@@ -44,8 +46,8 @@ model:
 training:
   batch_size: 32
   dynamic_pairs: true
-  epochs: 80
-  max_iterations: 2048
+  epochs: 96
+  max_iterations: 4096
   num_workers: 2
   optimizer: sgd
   learning_rate: 0.001

@@ -71,7 +71,10 @@ def main() -> int:
             checkpoint_path=args.output,
             positive_count=int(config["pair_sampling"]["positive_per_epoch"][stage]),
             negative_count=int(config["pair_sampling"]["negative_per_epoch"][stage]),
-            hard_negative_ratio=float(config["pair_sampling"].get("hard_negative_ratio", 0.0)),
+            hard_negative_ratio=_stage_float(
+                config["pair_sampling"].get("hard_negative_ratio", 0.0),
+                stage,
+            ),
             pair_sampling_strategy=str(config["pair_sampling"].get("strategy", "label_uniform")),
             image_size=int(config["views"][view]["image_size"]),
             crop_size=int(config["views"].get("local", {}).get("crop_size", 32)),
@@ -153,7 +156,10 @@ def _train_static_pairs(config: dict, records: list, stage: str, view: str, mode
         taxonomic_level=stage,
         positive_count=int(config["pair_sampling"]["positive_per_epoch"][stage]),
         negative_count=int(config["pair_sampling"]["negative_per_epoch"][stage]),
-        hard_negative_ratio=float(config["pair_sampling"].get("hard_negative_ratio", 0.0)),
+        hard_negative_ratio=_stage_float(
+            config["pair_sampling"].get("hard_negative_ratio", 0.0),
+            stage,
+        ),
         strategy=str(config["pair_sampling"].get("strategy", "label_uniform")),
         seed=int(config["seed"]),
     )
@@ -234,6 +240,18 @@ def _parse_top_ks(value) -> tuple[int, ...]:
     if isinstance(value, int):
         return (value,)
     return tuple(int(item) for item in value)
+
+
+def _stage_float(value, stage: str, default: float = 0.0) -> float:
+    if value in (None, ""):
+        return default
+    if isinstance(value, dict):
+        if stage in value:
+            return float(value[stage])
+        if "default" in value:
+            return float(value["default"])
+        return default
+    return float(value)
 
 
 def _preprocessing_enabled(config: dict) -> bool:
