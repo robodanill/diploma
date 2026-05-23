@@ -34,8 +34,23 @@ pair_sampling:
     genus: 600
     species: 1200
   hard_negative_ratio:
-    genus: 0.25
+    genus: 0.0
     species: 0.60
+  targeted_negative_ratio:
+    genus: 0.05
+    species: 0.0
+  targeted_negative_label_pairs:
+    genus:
+      - [Fraxinus, Acer]
+      - [Fraxinus, Viburnum]
+      - [Ailanthus, Acer]
+      - [Betula, Acer]
+      - [Corylus, Betula]
+      - [Crataegus, Sorbus]
+      - [Lippia, Prunus]
+      - [Populus, Salix]
+      - [Platanus, Acer]
+      - [Viburnum, Acer]
 
 model:
   backbone: vgg16
@@ -57,7 +72,12 @@ training:
   split: train
 
 evaluation:
-  enabled: false
+  enabled: true
+  source: train_subset
+  references_per_genus: 2
+  queries_per_genus: 2
+  top_k: [5, 15]
+  score_mode: l1
 
 inference:
   references_per_class: 6

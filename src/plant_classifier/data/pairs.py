@@ -40,6 +40,8 @@ def sample_pairs(
     negative_count: int,
     seed: int = 42,
     hard_negative_ratio: float = 0.0,
+    targeted_negative_ratio: float = 0.0,
+    targeted_negative_label_pairs: Iterable[tuple[str, str]] | None = None,
     strategy: str = "label_uniform",
 ) -> list[PairRecord]:
     """Sample positive and negative image pairs for Siamese metric learning."""
@@ -57,15 +59,28 @@ def sample_pairs(
         strategy,
     )
     hard_negative_ratio = max(0.0, min(1.0, hard_negative_ratio))
-    hard_negative_count = int(negative_count * hard_negative_ratio)
-    easy_negative_count = negative_count - hard_negative_count
-    negatives = _sample_hard_negative_pairs(
-        records,
+    targeted_negative_ratio = max(0.0, min(1.0, targeted_negative_ratio))
+    targeted_negative_count = int(negative_count * targeted_negative_ratio)
+    remaining_negative_count = negative_count - targeted_negative_count
+    hard_negative_count = int(remaining_negative_count * hard_negative_ratio)
+    easy_negative_count = remaining_negative_count - hard_negative_count
+    negatives = _sample_targeted_negative_pairs(
         grouped,
-        hard_negative_count,
+        targeted_negative_count,
         taxonomic_level,
         rng,
-        strategy,
+        targeted_negative_label_pairs or [],
+    )
+    easy_negative_count += targeted_negative_count - len(negatives)
+    negatives.extend(
+        _sample_hard_negative_pairs(
+            records,
+            grouped,
+            hard_negative_count,
+            taxonomic_level,
+            rng,
+            strategy,
+        )
     )
     negatives.extend(
         _sample_negative_pairs(
@@ -79,6 +94,42 @@ def sample_pairs(
     )
     pairs = positives + negatives
     rng.shuffle(pairs)
+    return pairs
+
+
+def _sample_targeted_negative_pairs(
+    grouped: dict[str, list[ImageRecord]],
+    count: int,
+    taxonomic_level: str,
+    rng: random.Random,
+    label_pairs: Iterable[tuple[str, str]],
+) -> list[PairRecord]:
+    if count <= 0:
+        return []
+
+    eligible_pairs = [
+        (left_label, right_label)
+        for left_label, right_label in label_pairs
+        if left_label != right_label and grouped.get(left_label) and grouped.get(right_label)
+    ]
+    if not eligible_pairs:
+        return []
+
+    pairs: list[PairRecord] = []
+    for _ in range(count):
+        left_label, right_label = rng.choice(eligible_pairs)
+        if rng.random() < 0.5:
+            left_label, right_label = right_label, left_label
+        left = rng.choice(grouped[left_label])
+        right = rng.choice(grouped[right_label])
+        pairs.append(
+            PairRecord(
+                left=left.image_path,
+                right=right.image_path,
+                label=0,
+                taxonomic_level=taxonomic_level,
+            )
+        )
     return pairs
 
 

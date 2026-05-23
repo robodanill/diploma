@@ -47,6 +47,37 @@ def test_sample_pairs_can_create_hard_negative_pairs_within_family() -> None:
         assert left.genus != right.genus
 
 
+def test_sample_pairs_can_force_targeted_negative_pairs() -> None:
+    records = [
+        ImageRecord(Path("a1.jpg"), "F1", "Acer", "S1"),
+        ImageRecord(Path("a2.jpg"), "F1", "Acer", "S1"),
+        ImageRecord(Path("f1.jpg"), "F1", "Fraxinus", "S2"),
+        ImageRecord(Path("f2.jpg"), "F1", "Fraxinus", "S2"),
+        ImageRecord(Path("q1.jpg"), "F2", "Quercus", "S3"),
+        ImageRecord(Path("q2.jpg"), "F2", "Quercus", "S3"),
+    ]
+
+    pairs = sample_pairs(
+        records,
+        "genus",
+        positive_count=0,
+        negative_count=10,
+        seed=11,
+        targeted_negative_ratio=1.0,
+        targeted_negative_label_pairs=[("Fraxinus", "Acer")],
+        strategy="pair_uniform",
+    )
+
+    records_by_path = {record.image_path: record for record in records}
+    assert len(pairs) == 10
+    for pair in pairs:
+        genera = {
+            records_by_path[pair.left].genus,
+            records_by_path[pair.right].genus,
+        }
+        assert genera == {"Acer", "Fraxinus"}
+
+
 def test_pair_uniform_sampling_weights_larger_positive_pair_pools() -> None:
     records = [
         ImageRecord(Path("g1_a.jpg"), "F1", "G1", "S1"),

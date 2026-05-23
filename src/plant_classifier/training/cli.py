@@ -75,6 +75,14 @@ def main() -> int:
                 config["pair_sampling"].get("hard_negative_ratio", 0.0),
                 stage,
             ),
+            targeted_negative_ratio=_stage_float(
+                config["pair_sampling"].get("targeted_negative_ratio", 0.0),
+                stage,
+            ),
+            targeted_negative_label_pairs=_stage_label_pairs(
+                config["pair_sampling"].get("targeted_negative_label_pairs", []),
+                stage,
+            ),
             pair_sampling_strategy=str(config["pair_sampling"].get("strategy", "label_uniform")),
             image_size=int(config["views"][view]["image_size"]),
             crop_size=int(config["views"].get("local", {}).get("crop_size", 32)),
@@ -88,7 +96,7 @@ def main() -> int:
             max_iterations=_optional_int(config["training"].get("max_iterations")),
             num_workers=int(config["training"].get("num_workers", 2)),
             seed=int(config["seed"]),
-            eval_fn=_build_eval_fn(config, records, stage),
+            eval_fn=_build_eval_fn(config, records, train_records, stage),
             progress_every=int(config["training"].get("progress_every_batches", 5)),
         )
     else:
@@ -160,6 +168,14 @@ def _train_static_pairs(config: dict, records: list, stage: str, view: str, mode
             config["pair_sampling"].get("hard_negative_ratio", 0.0),
             stage,
         ),
+        targeted_negative_ratio=_stage_float(
+            config["pair_sampling"].get("targeted_negative_ratio", 0.0),
+            stage,
+        ),
+        targeted_negative_label_pairs=_stage_label_pairs(
+            config["pair_sampling"].get("targeted_negative_label_pairs", []),
+            stage,
+        ),
         strategy=str(config["pair_sampling"].get("strategy", "label_uniform")),
         seed=int(config["seed"]),
     )
@@ -190,13 +206,19 @@ def _train_static_pairs(config: dict, records: list, stage: str, view: str, mode
     )
 
 
-def _build_eval_fn(config: dict, records: list, stage: str):
+def _build_eval_fn(config: dict, records: list, train_records: list, stage: str):
     evaluation_config = config.get("evaluation", {})
     if stage != "genus" or not evaluation_config.get("enabled", False):
         return None
 
+    eval_source = str(evaluation_config.get("source", "split"))
+    if eval_source == "train_subset":
+        eval_records = train_records
+    else:
+        eval_records = filter_records_by_split(records, evaluation_config.get("split", "val"))
+
     references, queries = prepare_genus_eval_records(
-        records=filter_records_by_split(records, evaluation_config.get("split", "val")),
+        records=eval_records,
         max_species=evaluation_config.get("max_species"),
         references_per_genus=int(evaluation_config.get("references_per_genus", 2)),
         queries_per_genus=int(evaluation_config.get("queries_per_genus", 2)),
@@ -204,7 +226,7 @@ def _build_eval_fn(config: dict, records: list, stage: str):
     if not references or not queries:
         print(
             "genus eval skipped: not enough records to create references and queries "
-            f"for split={evaluation_config.get('split', 'val')}",
+            f"for source={eval_source} split={evaluation_config.get('split', 'val')}",
             flush=True,
         )
         return None
@@ -215,7 +237,7 @@ def _build_eval_fn(config: dict, records: list, stage: str):
     crop_size = int(config["views"]["local"]["crop_size"])
     preprocessing = _preprocessing_enabled(config)
     print(
-        f"genus eval enabled: references={len(references)} "
+        f"genus eval enabled: source={eval_source} references={len(references)} "
         f"queries={len(queries)} top_k={top_ks} score_mode={score_mode}",
         flush=True,
     )
@@ -252,6 +274,22 @@ def _stage_float(value, stage: str, default: float = 0.0) -> float:
             return float(value["default"])
         return default
     return float(value)
+
+
+def _stage_label_pairs(value, stage: str) -> list[tuple[str, str]]:
+    if value in (None, ""):
+        return []
+    if isinstance(value, dict):
+        value = value.get(stage, value.get("default", []))
+    if not value:
+        return []
+
+    pairs: list[tuple[str, str]] = []
+    for item in value:
+        if len(item) != 2:
+            raise ValueError(f"Expected two labels in targeted negative pair, got: {item}")
+        pairs.append((str(item[0]), str(item[1])))
+    return pairs
 
 
 def _preprocessing_enabled(config: dict) -> bool:
