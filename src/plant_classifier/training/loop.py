@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
@@ -17,6 +18,7 @@ from plant_classifier.training.image_pairs import PairImageDataset
 class TrainResult:
     checkpoint_path: Path
     last_loss: float
+    history_path: Path | None = None
 
 
 def train_siamese(
@@ -43,7 +45,10 @@ def train_siamese(
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=momentum)
     scheduler = _build_scheduler(optimizer, lr_decay_step, lr_decay_gamma)
     last_loss = 0.0
+    best_loss = float("inf")
     global_step = 0
+    history_path = _history_path(checkpoint_path)
+    _reset_history(history_path)
 
     for epoch in range(epochs):
         started_at = perf_counter()
@@ -71,18 +76,31 @@ def train_siamese(
                 break
 
         last_loss = running_loss / max(1, batches_seen)
+        is_best = last_loss < best_loss
+        best_loss = min(best_loss, last_loss)
         elapsed = perf_counter() - started_at
         print(
             f"epoch={epoch + 1} loss={last_loss:.4f} "
             f"iterations={global_step} time={elapsed:.1f}s",
             flush=True,
         )
+        _append_history_row(
+            history_path,
+            {
+                "epoch": epoch + 1,
+                "train_loss": last_loss,
+                "best_loss": best_loss,
+                "iterations": global_step,
+                "elapsed_seconds": elapsed,
+                "is_best": is_best,
+            },
+        )
         if max_iterations and global_step >= max_iterations:
             break
 
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(model.state_dict(), checkpoint_path)
-    return TrainResult(checkpoint_path=checkpoint_path, last_loss=last_loss)
+    return TrainResult(checkpoint_path=checkpoint_path, last_loss=last_loss, history_path=history_path)
 
 
 def train_siamese_with_dynamic_pairs(
@@ -132,6 +150,8 @@ def train_siamese_with_dynamic_pairs(
     best_loss = float("inf")
     best_eval = -1.0
     global_step = 0
+    history_path = _history_path(checkpoint_path)
+    _reset_history(history_path)
 
     for epoch in range(epochs):
         pairs = sample_pairs(
@@ -210,11 +230,82 @@ def train_siamese_with_dynamic_pairs(
             _format_epoch(epoch, last_loss, best_loss, elapsed, eval_result, best_eval, best_marker),
             flush=True,
         )
+        _append_history_row(
+            history_path,
+            _history_row(
+                epoch=epoch,
+                loss=last_loss,
+                best_loss=best_loss,
+                elapsed=elapsed,
+                iterations=global_step,
+                eval_result=eval_result,
+                best_eval=best_eval,
+                is_best=is_best,
+            ),
+        )
         if max_iterations and global_step >= max_iterations:
             break
 
     torch.save(model.state_dict(), checkpoint_path)
-    return TrainResult(checkpoint_path=checkpoint_path, last_loss=last_loss)
+    return TrainResult(checkpoint_path=checkpoint_path, last_loss=last_loss, history_path=history_path)
+
+
+def _history_path(checkpoint_path: Path) -> Path:
+    return checkpoint_path.with_name(f"{checkpoint_path.stem}_history.csv")
+
+
+def _reset_history(history_path: Path) -> None:
+    if history_path.exists():
+        history_path.unlink()
+
+
+def _append_history_row(history_path: Path, row: dict) -> None:
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    is_new = not history_path.exists()
+    with history_path.open("a", encoding="utf-8", newline="") as file:
+        writer = csv.DictWriter(file, fieldnames=list(row.keys()))
+        if is_new:
+            writer.writeheader()
+        writer.writerow(row)
+
+
+def _history_row(
+    epoch: int,
+    loss: float,
+    best_loss: float,
+    elapsed: float,
+    iterations: int,
+    eval_result: GenusEvalResult | None,
+    best_eval: float,
+    is_best: bool,
+) -> dict:
+    row = {
+        "epoch": epoch + 1,
+        "train_loss": loss,
+        "best_loss": best_loss,
+        "iterations": iterations,
+        "elapsed_seconds": elapsed,
+        "is_best": is_best,
+    }
+    if eval_result is None:
+        return row
+
+    row.update(
+        {
+            "val_score_mode": eval_result.score_mode,
+            "val_pair_loss": "" if eval_result.pair_loss is None else eval_result.pair_loss,
+            "val_primary_top_k": eval_result.primary_top_k,
+            "val_primary_accuracy": eval_result.primary_accuracy,
+            "best_val_primary_accuracy": best_eval,
+            "val_references": eval_result.references,
+            "val_queries": eval_result.queries,
+            "val_primary_hits": eval_result.hits[eval_result.primary_top_k],
+        }
+    )
+    for top_k in eval_result.top_ks:
+        row[f"val_top{top_k}_genus_accuracy"] = eval_result.accuracies[top_k]
+        row[f"val_top{top_k}_genus_hits"] = eval_result.hits[top_k]
+    return row
 
 
 def _build_scheduler(optimizer, lr_decay_step: int, lr_decay_gamma: float):
@@ -273,16 +364,21 @@ def _format_epoch(
         f"best_loss={best_loss:.4f}",
     ]
     if eval_result is not None:
-        parts.extend(
+        eval_parts = [
+            " ".join(
+                f"top{top_k}_genus_accuracy={eval_result.accuracies[top_k]:.3f}"
+                for top_k in eval_result.top_ks
+            )
+        ]
+        if eval_result.pair_loss is not None:
+            eval_parts.append(f"val_pair_loss={eval_result.pair_loss:.4f}")
+        eval_parts.extend(
             [
-                " ".join(
-                    f"top{top_k}_genus_accuracy={eval_result.accuracies[top_k]:.3f}"
-                    for top_k in eval_result.top_ks
-                ),
                 f"score_mode={eval_result.score_mode}",
                 f"best_top{eval_result.primary_top_k}={best_eval:.3f}",
                 f"eval={eval_result.hits[eval_result.primary_top_k]}/{eval_result.queries}",
             ]
         )
+        parts.extend(eval_parts)
     parts.append(f"time={elapsed:.1f}s{best_marker}")
     return " ".join(parts)
