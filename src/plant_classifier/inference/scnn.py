@@ -41,11 +41,15 @@ class TwoStageSiamesePredictor:
         genus_score_mode: str = "comparator",
         species_score_mode: str = "comparator",
         species_aggregation: str = "max",
+        genus_candidate_mode: str = "reference",
+        genus_weight_mode: str = "frequency",
         device: str | None = None,
     ) -> None:
         _validate_score_mode(genus_score_mode)
         _validate_score_mode(species_score_mode)
         _validate_species_aggregation(species_aggregation)
+        _validate_genus_candidate_mode(genus_candidate_mode)
+        _validate_genus_weight_mode(genus_weight_mode)
         self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
         self.genus_model = genus_model.to(self.device).eval()
         self.species_model = species_model.to(self.device).eval()
@@ -57,6 +61,8 @@ class TwoStageSiamesePredictor:
         self.genus_score_mode = genus_score_mode
         self.species_score_mode = species_score_mode
         self.species_aggregation = species_aggregation
+        self.genus_candidate_mode = genus_candidate_mode
+        self.genus_weight_mode = genus_weight_mode
         self.global_transform = build_image_transform(
             "global",
             image_size=image_size,
@@ -111,8 +117,12 @@ class TwoStageSiamesePredictor:
             local_query = self.species_model.embed(_prepare(image, self.local_transform, self.device))
 
             genus_scores = self._rank_genus_references(global_query)
-            selected_genus = [reference.genus for reference, _ in genus_scores[: self.genus_candidates]]
-            genus_weights = Counter(selected_genus)
+            genus_weights = _select_genus_weights(
+                ranked_genus_scores=genus_scores,
+                genus_candidates=self.genus_candidates,
+                candidate_mode=self.genus_candidate_mode,
+                weight_mode=self.genus_weight_mode,
+            )
             candidate_genera = set(genus_weights)
 
             species_reference_scores: dict[tuple[str, str, str], list[float]] = {}
@@ -181,6 +191,52 @@ def _validate_score_mode(score_mode: str) -> None:
 def _validate_species_aggregation(aggregation: str) -> None:
     if aggregation not in {"max", "mean", "sum"}:
         raise ValueError(f"Unsupported species aggregation: {aggregation}")
+
+
+def _validate_genus_candidate_mode(mode: str) -> None:
+    if mode not in {"reference", "unique"}:
+        raise ValueError(f"Unsupported genus candidate mode: {mode}")
+
+
+def _validate_genus_weight_mode(mode: str) -> None:
+    if mode not in {"frequency", "score", "uniform"}:
+        raise ValueError(f"Unsupported genus weight mode: {mode}")
+
+
+def _select_genus_weights(
+    ranked_genus_scores: list[tuple[ReferenceEmbedding, float]],
+    genus_candidates: int,
+    candidate_mode: str,
+    weight_mode: str,
+) -> dict[str, float]:
+    if genus_candidates <= 0:
+        return {}
+
+    if candidate_mode == "reference":
+        selected = ranked_genus_scores[:genus_candidates]
+    elif candidate_mode == "unique":
+        selected = []
+        seen: set[str] = set()
+        for reference, score in ranked_genus_scores:
+            if reference.genus in seen:
+                continue
+            selected.append((reference, score))
+            seen.add(reference.genus)
+            if len(selected) >= genus_candidates:
+                break
+    else:
+        raise ValueError(f"Unsupported genus candidate mode: {candidate_mode}")
+
+    if weight_mode == "frequency":
+        return dict(Counter(reference.genus for reference, _score in selected))
+    if weight_mode == "uniform":
+        return {reference.genus: 1.0 for reference, _score in selected}
+    if weight_mode == "score":
+        weights: dict[str, float] = {}
+        for reference, score in selected:
+            weights[reference.genus] = max(weights.get(reference.genus, 0.0), float(score))
+        return weights
+    raise ValueError(f"Unsupported genus weight mode: {weight_mode}")
 
 
 def _aggregate_scores(scores: list[float], aggregation: str) -> float:

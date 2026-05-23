@@ -84,6 +84,18 @@ def main() -> int:
         choices=("max", "mean", "sum"),
         default=["max"],
     )
+    parser.add_argument(
+        "--genus-candidate-modes",
+        nargs="+",
+        choices=("reference", "unique"),
+        default=["reference"],
+    )
+    parser.add_argument(
+        "--genus-weight-modes",
+        nargs="+",
+        choices=("frequency", "score", "uniform"),
+        default=["frequency"],
+    )
     parser.add_argument("--all-reference-species", action="store_true")
     parser.add_argument(
         "--include-gold-genus-oracle",
@@ -229,21 +241,25 @@ def main() -> int:
     top_ks = tuple(sorted(set(args.top_k)))
     for genus_score_mode in args.genus_score_modes:
         for genus_candidates in args.genus_candidates:
-            for species_score_mode in args.species_score_modes:
-                for species_aggregation in args.species_aggregations:
-                    row = _evaluate_combo(
-                        query_records=tuple(query_records),
-                        genus_references=genus_reference_embeddings.records,
-                        species_references=species_reference_embeddings.records,
-                        genus_scores=genus_scores[genus_score_mode],
-                        species_scores=species_scores[species_score_mode],
-                        genus_candidates=genus_candidates,
-                        genus_score_mode=genus_score_mode,
-                        species_score_mode=species_score_mode,
-                        species_aggregation=species_aggregation,
-                        top_ks=top_ks,
-                    )
-                    rows.append(row)
+            for genus_candidate_mode in args.genus_candidate_modes:
+                for genus_weight_mode in args.genus_weight_modes:
+                    for species_score_mode in args.species_score_modes:
+                        for species_aggregation in args.species_aggregations:
+                            row = _evaluate_combo(
+                                query_records=tuple(query_records),
+                                genus_references=genus_reference_embeddings.records,
+                                species_references=species_reference_embeddings.records,
+                                genus_scores=genus_scores[genus_score_mode],
+                                species_scores=species_scores[species_score_mode],
+                                genus_candidates=genus_candidates,
+                                genus_score_mode=genus_score_mode,
+                                species_score_mode=species_score_mode,
+                                species_aggregation=species_aggregation,
+                                genus_candidate_mode=genus_candidate_mode,
+                                genus_weight_mode=genus_weight_mode,
+                                top_ks=top_ks,
+                            )
+                            rows.append(row)
     if args.include_gold_genus_oracle:
         for species_score_mode in args.species_score_modes:
             for species_aggregation in args.species_aggregations:
@@ -257,6 +273,8 @@ def main() -> int:
                     genus_score_mode="gold",
                     species_score_mode=species_score_mode,
                     species_aggregation=species_aggregation,
+                    genus_candidate_mode="gold",
+                    genus_weight_mode="gold",
                     top_ks=top_ks,
                     use_gold_genus=True,
                 )
@@ -414,6 +432,8 @@ def _evaluate_combo(
     genus_score_mode: str,
     species_score_mode: str,
     species_aggregation: str,
+    genus_candidate_mode: str,
+    genus_weight_mode: str,
     top_ks: tuple[int, ...],
     use_gold_genus: bool = False,
 ) -> dict[str, object]:
@@ -430,9 +450,14 @@ def _evaluate_combo(
                 genus_scores[query_index],
                 descending=True,
             ).tolist()
-            candidate_indices = ranked_genus_indices[:genus_candidates]
-            selected_genera = [genus_references[index].genus for index in candidate_indices]
-            genus_weights = Counter(selected_genera)
+            genus_weights = _select_genus_weights(
+                ranked_genus_indices=ranked_genus_indices,
+                genus_references=genus_references,
+                genus_scores=genus_scores[query_index],
+                genus_candidates=genus_candidates,
+                candidate_mode=genus_candidate_mode,
+                weight_mode=genus_weight_mode,
+            )
         candidate_genera = set(genus_weights)
         if query.genus in candidate_genera:
             genus_gate_hits += 1
@@ -474,6 +499,8 @@ def _evaluate_combo(
     row: dict[str, object] = {
         "candidate_mode": "gold_genus" if use_gold_genus else "ranked_genus",
         "genus_candidates": genus_candidates,
+        "genus_candidate_mode": genus_candidate_mode,
+        "genus_weight_mode": genus_weight_mode,
         "genus_score_mode": genus_score_mode,
         "species_score_mode": species_score_mode,
         "species_aggregation": species_aggregation,
@@ -490,6 +517,46 @@ def _evaluate_combo(
         row[f"top{top_k}"] = hits[top_k] / query_count
         row[f"top{top_k}_hits"] = hits[top_k]
     return row
+
+
+def _select_genus_weights(
+    ranked_genus_indices: list[int],
+    genus_references: tuple[ImageRecord, ...],
+    genus_scores: torch.Tensor,
+    genus_candidates: int,
+    candidate_mode: str,
+    weight_mode: str,
+) -> dict[str, float]:
+    if genus_candidates <= 0:
+        return {}
+
+    if candidate_mode == "reference":
+        candidate_indices = ranked_genus_indices[:genus_candidates]
+    elif candidate_mode == "unique":
+        candidate_indices = []
+        seen: set[str] = set()
+        for index in ranked_genus_indices:
+            genus = genus_references[index].genus
+            if genus in seen:
+                continue
+            candidate_indices.append(index)
+            seen.add(genus)
+            if len(candidate_indices) >= genus_candidates:
+                break
+    else:
+        raise ValueError(f"Unsupported genus candidate mode: {candidate_mode}")
+
+    if weight_mode == "frequency":
+        return dict(Counter(genus_references[index].genus for index in candidate_indices))
+    if weight_mode == "uniform":
+        return {genus_references[index].genus: 1.0 for index in candidate_indices}
+    if weight_mode == "score":
+        weights: dict[str, float] = {}
+        for index in candidate_indices:
+            genus = genus_references[index].genus
+            weights[genus] = max(weights.get(genus, 0.0), float(genus_scores[index]))
+        return weights
+    raise ValueError(f"Unsupported genus weight mode: {weight_mode}")
 
 
 def _aggregate(scores: Iterable[float], aggregation: str) -> float:
@@ -517,6 +584,8 @@ def _print_rows(rows: list[dict[str, object]], top_ks: tuple[int, ...], limit: i
         print(
             f"candidate_mode={row['candidate_mode']} "
             f"genus_candidates={row['genus_candidates']} "
+            f"genus_candidate_mode={row['genus_candidate_mode']} "
+            f"genus_weight_mode={row['genus_weight_mode']} "
             f"genus_score_mode={row['genus_score_mode']} "
             f"species_score_mode={row['species_score_mode']} "
             f"species_aggregation={row['species_aggregation']} "

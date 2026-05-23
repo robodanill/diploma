@@ -63,6 +63,21 @@ def main() -> int:
         help="How to combine multiple reference scores for the same species.",
     )
     parser.add_argument(
+        "--genus-candidate-mode",
+        choices=("reference", "unique"),
+        default="reference",
+        help=(
+            "How the genus gate is built: top reference images, or first occurrences "
+            "of unique genera in the ranked reference list."
+        ),
+    )
+    parser.add_argument(
+        "--genus-weight-mode",
+        choices=("frequency", "score", "uniform"),
+        default="frequency",
+        help="How selected genus candidates weight species scores.",
+    )
+    parser.add_argument(
         "--output-dir",
         type=Path,
         help="Write predictions, confusion matrix, and diagnostic plots to this directory.",
@@ -154,6 +169,8 @@ def main() -> int:
         genus_score_mode=args.genus_score_mode,
         species_score_mode=args.species_score_mode,
         species_aggregation=args.species_aggregation,
+        genus_candidate_mode=args.genus_candidate_mode,
+        genus_weight_mode=args.genus_weight_mode,
         device=str(device),
     )
 
@@ -171,6 +188,8 @@ def main() -> int:
         f"genus_score_mode={args.genus_score_mode} "
         f"species_score_mode={args.species_score_mode} "
         f"species_aggregation={args.species_aggregation} "
+        f"genus_candidate_mode={args.genus_candidate_mode} "
+        f"genus_weight_mode={args.genus_weight_mode} "
         f"reference_seed={args.reference_seed}"
     )
     for top_k in result.top_ks:
