@@ -33,6 +33,7 @@ def train_siamese(
     max_iterations: int | None = None,
     device: str | None = None,
     progress_every: int = 5,
+    checkpoint_every_epochs: int = 0,
 ) -> TrainResult:
     """Train a Siamese model with binary cross-entropy over pair labels."""
 
@@ -95,6 +96,7 @@ def train_siamese(
                 "is_best": is_best,
             },
         )
+        _save_periodic_checkpoint(model, checkpoint_path, epoch + 1, checkpoint_every_epochs)
         if max_iterations and global_step >= max_iterations:
             break
 
@@ -130,6 +132,7 @@ def train_siamese_with_dynamic_pairs(
     device: str | None = None,
     eval_fn=None,
     progress_every: int = 5,
+    checkpoint_every_epochs: int = 0,
 ) -> TrainResult:
     """Train a Siamese model while re-sampling positive/negative pairs every epoch."""
 
@@ -243,6 +246,7 @@ def train_siamese_with_dynamic_pairs(
                 is_best=is_best,
             ),
         )
+        _save_periodic_checkpoint(model, checkpoint_path, epoch + 1, checkpoint_every_epochs)
         if max_iterations and global_step >= max_iterations:
             break
 
@@ -252,6 +256,26 @@ def train_siamese_with_dynamic_pairs(
 
 def _history_path(checkpoint_path: Path) -> Path:
     return checkpoint_path.with_name(f"{checkpoint_path.stem}_history.csv")
+
+
+def _periodic_checkpoint_path(checkpoint_path: Path, epoch_number: int) -> Path:
+    return checkpoint_path.with_name(f"{checkpoint_path.stem}_{epoch_number}{checkpoint_path.suffix}")
+
+
+def _save_periodic_checkpoint(
+    model: nn.Module,
+    checkpoint_path: Path,
+    epoch_number: int,
+    checkpoint_every_epochs: int,
+) -> None:
+    if checkpoint_every_epochs <= 0:
+        return
+    if epoch_number % checkpoint_every_epochs != 0:
+        return
+
+    epoch_checkpoint_path = _periodic_checkpoint_path(checkpoint_path, epoch_number)
+    torch.save(model.state_dict(), epoch_checkpoint_path)
+    print(f"saved epoch checkpoint: {epoch_checkpoint_path}", flush=True)
 
 
 def _reset_history(history_path: Path) -> None:

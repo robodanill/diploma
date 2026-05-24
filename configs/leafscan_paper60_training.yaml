@@ -70,6 +70,9 @@ training:
   lr_decay_step: 512
   lr_decay_gamma: 0.5
   split: train
+  checkpoint_every_epochs:
+    genus: 10
+    species: 0
 
 evaluation:
   enabled: true

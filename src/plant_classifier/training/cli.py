@@ -98,6 +98,10 @@ def main() -> int:
             seed=int(config["seed"]),
             eval_fn=_build_eval_fn(config, records, train_records, stage),
             progress_every=int(config["training"].get("progress_every_batches", 5)),
+            checkpoint_every_epochs=_stage_int(
+                config["training"].get("checkpoint_every_epochs", 0),
+                stage,
+            ),
         )
     else:
         _train_static_pairs(config, train_records, stage, view, model, args.output)
@@ -203,6 +207,10 @@ def _train_static_pairs(config: dict, records: list, stage: str, view: str, mode
         lr_decay_gamma=float(config["training"].get("lr_decay_gamma", 0.5)),
         max_iterations=_optional_int(config["training"].get("max_iterations")),
         progress_every=int(config["training"].get("progress_every_batches", 5)),
+        checkpoint_every_epochs=_stage_int(
+            config["training"].get("checkpoint_every_epochs", 0),
+            stage,
+        ),
     )
 
 
@@ -274,6 +282,18 @@ def _stage_float(value, stage: str, default: float = 0.0) -> float:
             return float(value["default"])
         return default
     return float(value)
+
+
+def _stage_int(value, stage: str, default: int = 0) -> int:
+    if value in (None, ""):
+        return default
+    if isinstance(value, dict):
+        if stage in value:
+            return int(value[stage])
+        if "default" in value:
+            return int(value["default"])
+        return default
+    return int(value)
 
 
 def _stage_label_pairs(value, stage: str) -> list[tuple[str, str]]:
