@@ -81,7 +81,7 @@ class TwoStageSiamesePredictor:
     @torch.inference_mode()
     def _predict_one(self, image_path: Path, top_k: int) -> ImagePrediction:
         if not image_path.exists():
-            return ImagePrediction(image_path=image_path, labels=(), error="File does not exist")
+            return ImagePrediction(image_path=image_path, labels=(), error="Файл не существует")
 
         try:
             image = _load_rgb(image_path)
@@ -92,6 +92,7 @@ class TwoStageSiamesePredictor:
             selected_genus = [reference.genus for reference, _ in genus_scores[: self.genus_candidates]]
             genus_weights = Counter(selected_genus)
             candidate_genera = set(genus_weights)
+            genus_labels = self._genus_labels(genus_scores, limit=self.genus_candidates)
 
             species_scores: dict[tuple[str, str, str], float] = {}
             for reference in self.references:
@@ -114,7 +115,11 @@ class TwoStageSiamesePredictor:
                     reverse=True,
                 )[:top_k]
             ]
-            return ImagePrediction(image_path=image_path, labels=tuple(labels))
+            return ImagePrediction(
+                image_path=image_path,
+                labels=tuple(labels),
+                genus_labels=tuple(genus_labels),
+            )
         except Exception as exc:  # pragma: no cover - inference boundary
             return ImagePrediction(image_path=image_path, labels=(), error=str(exc))
 
@@ -131,6 +136,26 @@ class TwoStageSiamesePredictor:
             for reference in self.references
         ]
         return sorted(scores, key=lambda item: item[1], reverse=True)
+
+    @staticmethod
+    def _genus_labels(
+        genus_scores: list[tuple[ReferenceEmbedding, float]],
+        limit: int,
+    ) -> list[PredictionLabel]:
+        ranked: dict[str, tuple[str, float]] = {}
+        for reference, score in genus_scores:
+            current = ranked.get(reference.genus)
+            if current is None or score > current[1]:
+                ranked[reference.genus] = (reference.family, score)
+
+        return [
+            PredictionLabel(family=family, genus=genus, species="", score=score)
+            for genus, (family, score) in sorted(
+                ranked.items(),
+                key=lambda item: item[1][1],
+                reverse=True,
+            )[:limit]
+        ]
 
     @staticmethod
     def _similarity(model: SiameseNetwork, query: Tensor, reference: Tensor) -> float:
@@ -158,6 +183,8 @@ def save_reference_index(references: list[ReferenceEmbedding], output_path: Path
 
 def load_reference_index(reference_index: Path, map_location: torch.device | str = "cpu") -> list[ReferenceEmbedding]:
     payload = torch.load(reference_index, map_location=map_location)
+    if isinstance(payload, dict):
+        payload = payload.get("species_references") or payload.get("references") or []
     return [
         ReferenceEmbedding(
             image_path=Path(item["image_path"]),

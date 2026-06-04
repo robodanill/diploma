@@ -27,6 +27,7 @@ class ImagePrediction:
     image_path: Path
     labels: tuple[PredictionLabel, ...]
     error: str | None = None
+    genus_labels: tuple[PredictionLabel, ...] = ()
 
     @property
     def top_label(self) -> PredictionLabel | None:

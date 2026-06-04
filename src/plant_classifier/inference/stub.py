@@ -27,7 +27,7 @@ class StubPredictor:
 
     def _predict_one(self, image_path: Path, top_k: int) -> ImagePrediction:
         if not image_path.exists():
-            return ImagePrediction(image_path=image_path, labels=(), error="File does not exist")
+            return ImagePrediction(image_path=image_path, labels=(), error="Файл не существует")
 
         digest = hashlib.sha256(str(image_path.resolve()).encode("utf-8")).digest()
         start = digest[0] % len(self._classes)
@@ -45,5 +45,23 @@ class StubPredictor:
                 )
             )
 
-        return ImagePrediction(image_path=image_path, labels=tuple(labels))
+        genus_labels: list[PredictionLabel] = []
+        seen_genera: set[str] = set()
+        for label in labels:
+            if label.genus in seen_genera:
+                continue
+            seen_genera.add(label.genus)
+            genus_labels.append(
+                PredictionLabel(
+                    family=label.family,
+                    genus=label.genus,
+                    species="",
+                    score=label.score,
+                )
+            )
 
+        return ImagePrediction(
+            image_path=image_path,
+            labels=tuple(labels),
+            genus_labels=tuple(genus_labels),
+        )

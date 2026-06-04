@@ -102,6 +102,25 @@ def test_parse_ground_truth_metadata_matches_relative_image_path(tmp_path: Path)
     assert label.display_name == "Prunus avium"
 
 
+def test_load_ground_truth_label_matches_project_relative_path_in_local_metadata(
+    tmp_path: Path,
+) -> None:
+    image_folder = tmp_path / "PlantCLEF2015TestDataWithAnnotations"
+    image_folder.mkdir()
+    image_path = image_folder / "leaf.jpg"
+    image_path.write_bytes(b"")
+    (image_folder / "metadata.csv").write_text(
+        "image_path,family,genus,species\n"
+        "PlantCLEF2015TestDataWithAnnotations/leaf.jpg,Rosaceae,Prunus,avium\n",
+        encoding="utf-8",
+    )
+
+    label = load_ground_truth_label(image_path)
+
+    assert label is not None
+    assert label.display_name == "Prunus avium"
+
+
 def test_parse_ground_truth_metadata_accepts_case_insensitive_headers(tmp_path: Path) -> None:
     image_path = tmp_path / "leaf.jpg"
     image_path.write_bytes(b"")

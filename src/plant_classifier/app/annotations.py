@@ -157,9 +157,10 @@ def _find_metadata_path(folder: Path) -> Path | None:
     if not folder.is_dir():
         return None
     expected_names = set(METADATA_FILENAMES)
-    for path in folder.iterdir():
-        if path.is_file() and path.name.lower() in expected_names:
-            return path
+    for current_folder in (folder, *folder.parents):
+        for path in current_folder.iterdir():
+            if path.is_file() and path.name.lower() in expected_names:
+                return path
     return None
 
 
@@ -169,13 +170,17 @@ def _metadata_row_matches(row: dict[str, str], image_path: Path, metadata_root: 
         return False
 
     candidate = Path(value)
-    resolved_candidate = candidate if candidate.is_absolute() else metadata_root / candidate
-    if _same_path(resolved_candidate, image_path):
-        return True
-    return not candidate.is_absolute() and len(candidate.parts) == 1 and _same_name(
-        candidate,
-        image_path,
+    if candidate.is_absolute():
+        return _same_path(candidate, image_path)
+
+    possible_paths = (
+        metadata_root / candidate,
+        metadata_root.parent / candidate,
+        metadata_root / candidate.name,
     )
+    if any(_same_path(path, image_path) for path in possible_paths):
+        return True
+    return len(candidate.parts) == 1 and _same_name(candidate, image_path)
 
 
 def _same_path(left: Path, right: Path) -> bool:
