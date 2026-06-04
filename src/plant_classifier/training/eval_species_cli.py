@@ -137,6 +137,7 @@ def main() -> int:
 
     image_size = int(config["views"]["global"]["image_size"])
     crop_size = int(config["views"]["local"]["crop_size"])
+    crop_position = _local_crop_position(config)
     preprocessing = _preprocessing_enabled(config)
     genus_embeddings = build_reference_embeddings(
         genus_model=genus_model,
@@ -144,6 +145,7 @@ def main() -> int:
         references=genus_references,
         image_size=image_size,
         crop_size=crop_size,
+        crop_position=crop_position,
         preprocessing=preprocessing,
         device=device,
     )
@@ -153,6 +155,7 @@ def main() -> int:
         references=species_references,
         image_size=image_size,
         crop_size=crop_size,
+        crop_position=crop_position,
         preprocessing=preprocessing,
         device=device,
     )
@@ -165,6 +168,7 @@ def main() -> int:
         top_k=max(args.top_k),
         image_size=image_size,
         local_crop_size=crop_size,
+        local_crop_position=crop_position,
         preprocessing=preprocessing,
         genus_score_mode=args.genus_score_mode,
         species_score_mode=args.species_score_mode,
@@ -263,6 +267,10 @@ def _describe_genus_distribution(records: list[ImageRecord], limit: int = 10) ->
 def _preprocessing_enabled(config: dict) -> bool:
     preprocessing = config.get("preprocessing", {})
     return bool(preprocessing.get("enabled", preprocessing.get("leaf_bbox", False)))
+
+
+def _local_crop_position(config: dict) -> str:
+    return str(config.get("views", {}).get("local", {}).get("crop_position", "center"))
 
 
 def _require_checkpoint(path: Path) -> None:

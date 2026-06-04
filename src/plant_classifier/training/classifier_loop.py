@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
@@ -15,6 +16,7 @@ class ClassifierTrainResult:
     best_checkpoint_path: Path
     last_loss: float
     class_to_idx: dict[str, int]
+    history_path: Path | None = None
 
 
 def train_classifier(
@@ -51,6 +53,8 @@ def train_classifier(
     best_loss = float("inf")
     last_loss = 0.0
     global_step = 0
+    history_path = _history_path(checkpoint_path)
+    _reset_history(history_path)
     for epoch in range(epochs):
         started_at = perf_counter()
         running_loss = 0.0
@@ -105,6 +109,18 @@ def train_classifier(
             best_marker = " best"
         else:
             best_marker = ""
+        _append_history_row(
+            history_path,
+            {
+                "epoch": epoch + 1,
+                "train_loss": last_loss,
+                "best_loss": best_loss,
+                "train_accuracy": train_accuracy,
+                "iterations": global_step,
+                "elapsed_seconds": elapsed,
+                "is_best": bool(best_marker),
+            },
+        )
         print(
             f"epoch={epoch + 1} loss={last_loss:.4f} best_loss={best_loss:.4f} "
             f"train_accuracy={train_accuracy:.3f} iterations={global_step} "
@@ -128,6 +144,7 @@ def train_classifier(
         best_checkpoint_path=best_checkpoint_path,
         last_loss=last_loss,
         class_to_idx=class_to_idx,
+        history_path=history_path,
     )
 
 
@@ -151,6 +168,25 @@ def _save_checkpoint(
         },
         path,
     )
+
+
+def _history_path(checkpoint_path: Path) -> Path:
+    return checkpoint_path.with_name(f"{checkpoint_path.stem}_history.csv")
+
+
+def _reset_history(history_path: Path) -> None:
+    if history_path.exists():
+        history_path.unlink()
+
+
+def _append_history_row(history_path: Path, row: dict) -> None:
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    is_new = not history_path.exists()
+    with history_path.open("a", encoding="utf-8", newline="") as file:
+        writer = csv.DictWriter(file, fieldnames=list(row.keys()))
+        if is_new:
+            writer.writeheader()
+        writer.writerow(row)
 
 
 def _build_scheduler(optimizer, lr_decay_step: int, lr_decay_gamma: float):

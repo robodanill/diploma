@@ -15,7 +15,7 @@
 % ==================================================
 \usepackage[
 left=30mm,
-right=10mm,
+right=15mm,
 top=20mm,
 bottom=20mm,
 ]{geometry}
@@ -25,6 +25,8 @@ bottom=20mm,
 % ==================================================
 \usepackage[expansion=false]{microtype}
 \sloppy
+\hyphenpenalty=50
+\exhyphenpenalty=50
 
 % ==================================================
 % Межстрочный интервал
@@ -69,7 +71,7 @@ bottom=20mm,
 
 \titleformat{\subsubsection}[block]
 {\hspace{\parindent}\large\bfseries}
-{\thesubsection}{0.5em}{\large\bfseries\raggedright}
+{\thesubsubsection}{0.5em}{\large\bfseries\raggedright}
 
 \titlespacing{\chapter}{12.5mm}{-22pt}{10pt}
 \titlespacing{\section}{12.5mm}{10pt}{10pt}
@@ -89,6 +91,8 @@ bottom=20mm,
 \usepackage{threeparttable}
 \usepackage{multirow}
 \usepackage{booktabs}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
 
 % ==================================================
 % Подписи
@@ -139,7 +143,9 @@ sorting=none,
 \usepackage{csquotes}
 
 \DeclareFieldFormat{urldate}
-{(дата обращения:\addspace\thefield{urlday}\adddot\thefield{urlmonth}\adddot\thefield{urlyear})}
+{(Дата обращения:\addspace\ifnum\thefield{urlday}<10 0\fi\thefield{urlday}\adddot\ifnum\thefield{urlmonth}<10 0\fi\thefield{urlmonth}\adddot\thefield{urlyear})}
+\DeclareFieldFormat[online]{title}{#1\addspace\mkbibbrackets{Электронный ресурс}}
+\DeclareFieldFormat{url}{Режим доступа URL\addcolon\space\url{#1}}
 
 % ==================================================
 % Гиперссылки
@@ -156,6 +162,7 @@ sorting=none,
 \usepackage{placeins}
 \usepackage{changepage}
 \usepackage{pdfpages}
+\usepackage{needspace}
 %\usepackage{soul}
 %\usepackage{svg}
 %\usepackage{shellesc}
@@ -167,6 +174,9 @@ sorting=none,
 	\renewcommand\contentsname{СОДЕРЖАНИЕ}
 	\tableofcontents
 }
+
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{2}
 
 % ==================================================
 % Счётчики рисунков, таблиц, источников (bmstu-essay)
@@ -191,6 +201,9 @@ sorting=none,
 
 \pretocmd{\chapter}{\addtocounter{totfigures}{\value{figure}}\setcounter{figure}{0}}{}{}
 \pretocmd{\chapter}{\addtocounter{tottables}{\value{table}}\setcounter{table}{0}}{}{}
+\pretocmd{\section}{\Needspace{8\baselineskip}}{}{}
+\pretocmd{\subsection}{\Needspace{7\baselineskip}}{}{}
+\pretocmd{\subsubsection}{\Needspace{6\baselineskip}}{}{}
 
 % ==================================================
 % Подсчёт источников
@@ -283,7 +296,7 @@ sorting=none,
 	
 	% --- строка с подсчётами (безопасно, если приложений ещё нет)
 	Расчётно-пояснительная записка \begin{NoHyper}\pageref{LastPage}\end{NoHyper}~с., 
-	\totfig~рис., \tottab~табл., \arabic{totbibentries}~источн., 1~прил.
+	\totfig~рис., \tottab~табл., \arabic{totbibentries}~источн., 2~прил.
 	
 	\noindent\MakeUppercase{#1} \par
 }
@@ -296,3 +309,12 @@ sorting=none,
 % Пользовательские команды
 % ==================================================
 \newcommand*{\rom}[1]{\uppercase\expandafter{\romannumeral #1\relax}}
+
+\newenvironment{formulaexplanation}
+{
+	\par\noindent где
+	\begin{itemize}[label=---, itemsep=0pt, parsep=0pt, topsep=0pt]
+}
+{
+	\end{itemize}
+}

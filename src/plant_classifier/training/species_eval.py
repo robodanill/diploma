@@ -64,6 +64,7 @@ def build_reference_embeddings(
     crop_size: int,
     preprocessing: bool,
     device: torch.device,
+    crop_position: str = "center",
 ) -> list[ReferenceEmbedding]:
     global_transform = build_image_transform(
         "global",
@@ -75,6 +76,7 @@ def build_reference_embeddings(
         "local",
         image_size=image_size,
         crop_size=crop_size,
+        crop_position=crop_position,
         preprocessing=preprocessing,
     )
 

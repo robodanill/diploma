@@ -161,6 +161,7 @@ def main() -> int:
 
     image_size = int(config["views"]["global"]["image_size"])
     crop_size = int(config["views"]["local"]["crop_size"])
+    crop_position = _local_crop_position(config)
     preprocessing = _preprocessing_enabled(config)
     print(
         f"genus_references={len(genus_references)} species_references={len(species_references)} "
@@ -187,6 +188,7 @@ def main() -> int:
         "local",
         image_size=image_size,
         crop_size=crop_size,
+        crop_position=crop_position,
         preprocessing=preprocessing,
     )
     print("embedding references and queries once", flush=True)
@@ -608,6 +610,10 @@ def _write_csv(rows: list[dict[str, object]], output_csv: Path) -> None:
 def _preprocessing_enabled(config: dict) -> bool:
     preprocessing = config.get("preprocessing", {})
     return bool(preprocessing.get("enabled", preprocessing.get("leaf_bbox", False)))
+
+
+def _local_crop_position(config: dict) -> str:
+    return str(config.get("views", {}).get("local", {}).get("crop_position", "center"))
 
 
 def _require_checkpoint(path: Path) -> None:

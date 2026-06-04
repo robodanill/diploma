@@ -70,6 +70,7 @@ def main() -> int:
         "local",
         image_size=int(config["views"]["local"]["image_size"]),
         crop_size=int(config["views"]["local"]["crop_size"]),
+        crop_position=_local_crop_position(config),
         preprocessing=_preprocessing_enabled(config),
     )
 
@@ -171,6 +172,10 @@ def _build_embeddings(
 def _preprocessing_enabled(config: dict) -> bool:
     preprocessing = config.get("preprocessing", {})
     return bool(preprocessing.get("enabled", preprocessing.get("leaf_bbox", False)))
+
+
+def _local_crop_position(config: dict) -> str:
+    return str(config.get("views", {}).get("local", {}).get("crop_position", "center"))
 
 
 def _load_rgb(path: Path):

@@ -37,6 +37,7 @@ class TwoStageSiamesePredictor:
         top_k: int = 5,
         image_size: int = 224,
         local_crop_size: int = 32,
+        local_crop_position: str = "center",
         preprocessing: bool = False,
         genus_score_mode: str = "comparator",
         species_score_mode: str = "comparator",
@@ -73,6 +74,7 @@ class TwoStageSiamesePredictor:
             "local",
             image_size=image_size,
             crop_size=local_crop_size,
+            crop_position=local_crop_position,
             preprocessing=preprocessing,
         )
 

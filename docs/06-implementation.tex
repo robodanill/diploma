@@ -58,9 +58,13 @@
 		\hline
 		\texttt{views.global.}\newline\texttt{image\_size} & Размер изображения для глобального представления. & \texttt{224} \\
 		\hline
-		\texttt{views.local.}\newline\texttt{image\_size},\newline\texttt{views.local.}\newline\texttt{crop\_size} & Размер локального представления и центрального фрагмента. & \texttt{224; 32} \\
+		\texttt{views.local.}\newline\texttt{image\_size} & Размер изображения для локального представления. & \texttt{224} \\
 		\hline
-		\texttt{preprocessing.}\newline\texttt{enabled},\newline\texttt{preprocessing.}\newline\texttt{leaf\_bbox} & Включение предобработки и выделения области листа. & \texttt{true; true} \\
+		\texttt{views.local.}\newline\texttt{crop\_size} & Размер центрального фрагмента локального представления. & \texttt{32} \\
+		\hline
+		\texttt{preprocessing.}\newline\texttt{enabled} & Включение предобработки изображений. & \texttt{true} \\
+		\hline
+		\texttt{preprocessing.}\newline\texttt{leaf\_bbox} & Включение выделения области листа. & \texttt{true} \\
 		\hline
 		\texttt{pair\_sampling.}\newline\texttt{positive\_per\_epoch} & Число положительных пар на эпоху для уровней рода и вида. & \texttt{genus=400;}\newline\texttt{species=800} \\
 		\hline
@@ -68,15 +72,31 @@
 		\hline
 		\texttt{pair\_sampling.}\newline\texttt{hard\_negative\_ratio} & Доля сложных отрицательных пар в выбранной конфигурации. & \texttt{0.0} \\
 		\hline
-		\texttt{model.backbone},\newline\texttt{model.pretrained} & Базовая свёрточная сеть и использование предобученных весов. & \texttt{vgg16; true} \\
+		\texttt{model.backbone} & Базовая свёрточная сеть. & \texttt{vgg16} \\
 		\hline
-		\texttt{training.batch\_size},\newline\texttt{training.epochs} & Размер batch и число эпох обучения. & \texttt{32; 80} \\
+		\texttt{model.pretrained} & Использование предобученных весов. & \texttt{true} \\
 		\hline
-		\texttt{training.optimizer},\newline\texttt{training.}\newline\texttt{learning\_rate},\newline\texttt{training.momentum} & Алгоритм оптимизации и его основные параметры. & \texttt{sgd; 0.001; 0.9} \\
+		\texttt{training.}\newline\texttt{batch\_size} & Размер batch при обучении. & \texttt{32} \\
 		\hline
-		\texttt{training.}\newline\texttt{max\_iterations},\newline\texttt{training.}\newline\texttt{lr\_decay\_step},\newline\texttt{training.}\newline\texttt{lr\_decay\_gamma} & Ограничение числа итераций и параметры уменьшения скорости обучения. & \texttt{2048; 512; 0.5} \\
+		\texttt{training.epochs} & Число эпох обучения. & \texttt{80} \\
 		\hline
-		\texttt{inference.}\newline\texttt{references\_per\_class},\newline\texttt{inference.}\newline\texttt{genus\_candidates},\newline\texttt{inference.top\_k} & Число эталонов на класс, число родов-кандидатов и размер итогового ранжированного списка. & \texttt{6; 30; 5} \\
+		\texttt{training.}\newline\texttt{optimizer} & Алгоритм оптимизации. & \texttt{sgd} \\
+		\hline
+		\texttt{training.}\newline\texttt{learning\_rate} & Скорость обучения. & \texttt{0.001} \\
+		\hline
+		\texttt{training.momentum} & Коэффициент момента оптимизатора. & \texttt{0.9} \\
+		\hline
+		\texttt{training.}\newline\texttt{max\_iterations} & Ограничение числа итераций. & \texttt{2048} \\
+		\hline
+		\texttt{training.}\newline\texttt{lr\_decay\_step} & Шаг уменьшения скорости обучения. & \texttt{512} \\
+		\hline
+		\texttt{training.}\newline\texttt{lr\_decay\_gamma} & Множитель уменьшения скорости обучения. & \texttt{0.5} \\
+		\hline
+		\texttt{inference.}\newline\texttt{references\_per\_class} & Число эталонов на класс. & \texttt{6} \\
+		\hline
+		\texttt{inference.}\newline\texttt{genus\_candidates} & Число родов-кандидатов. & \texttt{30} \\
+		\hline
+		\texttt{inference.top\_k} & Размер итогового ранжированного списка. & \texttt{5} \\
 		\hline
 	\end{tabularx}
 \end{table}

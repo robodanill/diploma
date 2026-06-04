@@ -19,7 +19,7 @@ views:
   local:
     image_size: 224
     crop_size: 32
-    crop_position: center
+    crop_position: leaf_interior
 
 preprocessing:
   enabled: true
@@ -76,10 +76,12 @@ training:
 
 evaluation:
   enabled: true
-  source: train_subset
-  references_per_genus: 2
-  queries_per_genus: 2
-  top_k: [5, 15]
+  source: train_holdout
+  split: train
+  seed: 777
+  references_per_genus: 6
+  queries_per_genus: 5
+  top_k: [5, 15, 30]
   score_mode: l1
 
 inference:

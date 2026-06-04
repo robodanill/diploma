@@ -322,6 +322,16 @@ class MainWindow(QMainWindow):
         )
         if not selected:
             return
+        local_crop_position, selected = QInputDialog.getItem(
+            self,
+            "Select local crop",
+            "Local crop:",
+            ["center", "leaf_interior"],
+            0,
+            False,
+        )
+        if not selected:
+            return
 
         try:
             self.predictor = create_predictor(
@@ -330,6 +340,7 @@ class MainWindow(QMainWindow):
                     species_checkpoint=species_checkpoint,
                     reference_index=reference_index,
                     backbone=backbone,
+                    local_crop_position=local_crop_position,
                 )
             )
         except Exception as exc:

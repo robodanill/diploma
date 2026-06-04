@@ -119,6 +119,7 @@ def train_siamese_with_dynamic_pairs(
     pair_sampling_strategy: str = "label_uniform",
     image_size: int = 224,
     crop_size: int = 32,
+    crop_position: str = "center",
     preprocessing: bool = False,
     batch_size: int = 32,
     epochs: int = 20,
@@ -182,6 +183,7 @@ def train_siamese_with_dynamic_pairs(
             view=view,
             image_size=image_size,
             crop_size=crop_size,
+            crop_position=crop_position,
             preprocessing=preprocessing,
         )
         dataloader = DataLoader(

@@ -7,6 +7,7 @@ import yaml
 from torch.utils.data import DataLoader
 
 from plant_classifier.data import (
+    ImageRecord,
     filter_records_by_split,
     limit_records_by_genus,
     limit_records_by_species,
@@ -14,7 +15,11 @@ from plant_classifier.data import (
     sample_pairs,
 )
 from plant_classifier.models.siamese import BackboneSpec, build_siamese_network
-from plant_classifier.training.genus_eval import evaluate_genus_retrieval, prepare_genus_eval_records
+from plant_classifier.training.genus_eval import (
+    evaluate_genus_retrieval,
+    prepare_genus_eval_records,
+    select_genus_references,
+)
 from plant_classifier.training.image_pairs import PairImageDataset
 from plant_classifier.training.loop import train_siamese, train_siamese_with_dynamic_pairs
 from plant_classifier.training.validation import validate_records_exist
@@ -86,6 +91,7 @@ def main() -> int:
             pair_sampling_strategy=str(config["pair_sampling"].get("strategy", "label_uniform")),
             image_size=int(config["views"][view]["image_size"]),
             crop_size=int(config["views"].get("local", {}).get("crop_size", 32)),
+            crop_position=_local_crop_position(config),
             preprocessing=_preprocessing_enabled(config),
             batch_size=int(config["training"]["batch_size"]),
             epochs=int(config["training"]["epochs"]),
@@ -188,6 +194,7 @@ def _train_static_pairs(config: dict, records: list, stage: str, view: str, mode
         view=view,
         image_size=int(config["views"][view]["image_size"]),
         crop_size=int(config["views"].get("local", {}).get("crop_size", 32)),
+        crop_position=_local_crop_position(config),
         preprocessing=_preprocessing_enabled(config),
     )
     dataloader = DataLoader(
@@ -222,15 +229,26 @@ def _build_eval_fn(config: dict, records: list, train_records: list, stage: str)
     eval_source = str(evaluation_config.get("source", "split"))
     if eval_source == "train_subset":
         eval_records = train_records
+        references, queries = prepare_genus_eval_records(
+            records=eval_records,
+            max_species=evaluation_config.get("max_species"),
+            references_per_genus=int(evaluation_config.get("references_per_genus", 2)),
+            queries_per_genus=int(evaluation_config.get("queries_per_genus", 2)),
+        )
+    elif eval_source == "train_holdout":
+        references, queries = _prepare_train_holdout_genus_eval_records(
+            records=records,
+            train_records=train_records,
+            evaluation_config=evaluation_config,
+        )
     else:
         eval_records = filter_records_by_split(records, evaluation_config.get("split", "val"))
-
-    references, queries = prepare_genus_eval_records(
-        records=eval_records,
-        max_species=evaluation_config.get("max_species"),
-        references_per_genus=int(evaluation_config.get("references_per_genus", 2)),
-        queries_per_genus=int(evaluation_config.get("queries_per_genus", 2)),
-    )
+        references, queries = prepare_genus_eval_records(
+            records=eval_records,
+            max_species=evaluation_config.get("max_species"),
+            references_per_genus=int(evaluation_config.get("references_per_genus", 2)),
+            queries_per_genus=int(evaluation_config.get("queries_per_genus", 2)),
+        )
     if not references or not queries:
         print(
             "genus eval skipped: not enough records to create references and queries "
@@ -264,6 +282,49 @@ def _build_eval_fn(config: dict, records: list, train_records: list, stage: str)
         )
 
     return eval_fn
+
+
+def _prepare_train_holdout_genus_eval_records(
+    records: list[ImageRecord],
+    train_records: list[ImageRecord],
+    evaluation_config: dict,
+) -> tuple[list[ImageRecord], list[ImageRecord]]:
+    reference_seed = _optional_int(
+        evaluation_config.get("reference_seed", evaluation_config.get("seed"))
+    )
+    query_seed = _optional_int(
+        evaluation_config.get("query_seed", evaluation_config.get("seed"))
+    )
+    references_per_genus = int(evaluation_config.get("references_per_genus", 6))
+    queries_per_genus = int(evaluation_config.get("queries_per_genus", 5))
+
+    split_records = filter_records_by_split(records, evaluation_config.get("split", "train"))
+    train_keys = {_record_key(record) for record in train_records}
+    train_species = {record.species for record in train_records}
+
+    references = select_genus_references(
+        train_records,
+        references_per_genus=references_per_genus,
+        seed=reference_seed,
+    )
+    reference_genera = {record.genus for record in references}
+    query_pool = [
+        record
+        for record in split_records
+        if record.species in train_species
+        and record.genus in reference_genera
+        and _record_key(record) not in train_keys
+    ]
+    queries = select_genus_references(
+        query_pool,
+        references_per_genus=queries_per_genus,
+        seed=query_seed,
+    )
+    return references, queries
+
+
+def _record_key(record: ImageRecord) -> str:
+    return str(record.image_path.resolve())
 
 
 def _parse_top_ks(value) -> tuple[int, ...]:
@@ -315,6 +376,10 @@ def _stage_label_pairs(value, stage: str) -> list[tuple[str, str]]:
 def _preprocessing_enabled(config: dict) -> bool:
     preprocessing = config.get("preprocessing", {})
     return bool(preprocessing.get("enabled", preprocessing.get("leaf_bbox", False)))
+
+
+def _local_crop_position(config: dict) -> str:
+    return str(config.get("views", {}).get("local", {}).get("crop_position", "center"))
 
 
 def _optional_int(value) -> int | None:

@@ -22,6 +22,7 @@ class ModelArtifacts:
     species_checkpoint: Path
     reference_index: Path
     backbone: str = "vgg16"
+    local_crop_position: str = "center"
 
 
 def create_predictor(artifacts: ModelArtifacts | None = None) -> Predictor:
@@ -39,6 +40,7 @@ def create_predictor(artifacts: ModelArtifacts | None = None) -> Predictor:
         reference_index=resolved_artifacts.reference_index,
         backbone=resolved_artifacts.backbone,
         pretrained=False,
+        local_crop_position=resolved_artifacts.local_crop_position,
         preprocessing=_env_flag("PLANT_CLASSIFIER_PREPROCESSING"),
     )
 
@@ -54,6 +56,7 @@ def artifacts_from_environment() -> ModelArtifacts | None:
         species_checkpoint=Path(species),
         reference_index=Path(references),
         backbone=os.getenv("PLANT_CLASSIFIER_BACKBONE", "vgg16"),
+        local_crop_position=os.getenv("PLANT_CLASSIFIER_LOCAL_CROP_POSITION", "center"),
     )
 
 
