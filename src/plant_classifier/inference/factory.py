@@ -109,3 +109,14 @@ def _validate_artifacts(artifacts: ModelArtifacts) -> None:
         raise ValueError(
             "Genus checkpoint, species checkpoint, and reference index must be three different files"
         )
+
+    checkpoint_names = (
+        artifacts.genus_checkpoint.name.lower(),
+        artifacts.species_checkpoint.name.lower(),
+    )
+    if any(name.startswith("final_scnn_") for name in checkpoint_names):
+        if "adapt" not in artifacts.reference_index.name.lower():
+            raise ValueError(
+                "final_scnn_* checkpoints require the matching "
+                "final_reference_index_adapt_vgg16.pt reference index"
+            )

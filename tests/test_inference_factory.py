@@ -61,3 +61,36 @@ def test_artifact_validation_rejects_reusing_same_file_for_two_roles(tmp_path: P
 
     with pytest.raises(ValueError, match="three different files"):
         _validate_artifacts(artifacts)
+
+
+def test_artifact_validation_rejects_paper60_index_for_final_checkpoints(tmp_path: Path) -> None:
+    genus = tmp_path / "final_scnn_genus_vgg16.pt"
+    species = tmp_path / "final_scnn_species_vgg16.pt"
+    index = tmp_path / "final_reference_index_paper60_vgg16.pt"
+    for path in (genus, species, index):
+        path.touch()
+
+    artifacts = ModelArtifacts(
+        genus_checkpoint=genus,
+        species_checkpoint=species,
+        reference_index=index,
+    )
+
+    with pytest.raises(ValueError, match="final_reference_index_adapt_vgg16.pt"):
+        _validate_artifacts(artifacts)
+
+
+def test_artifact_validation_accepts_adapt_index_for_final_checkpoints(tmp_path: Path) -> None:
+    genus = tmp_path / "final_scnn_genus_vgg16.pt"
+    species = tmp_path / "final_scnn_species_vgg16.pt"
+    index = tmp_path / "final_reference_index_adapt_vgg16.pt"
+    for path in (genus, species, index):
+        path.touch()
+
+    _validate_artifacts(
+        ModelArtifacts(
+            genus_checkpoint=genus,
+            species_checkpoint=species,
+            reference_index=index,
+        )
+    )

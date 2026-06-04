@@ -35,7 +35,7 @@ After training, the app can load the exported artifacts through `Load Model`, or
 ```bash
 export PLANT_CLASSIFIER_GENUS_CHECKPOINT=weights/final_scnn_genus_vgg16.pt
 export PLANT_CLASSIFIER_SPECIES_CHECKPOINT=weights/final_scnn_species_vgg16.pt
-export PLANT_CLASSIFIER_REFERENCE_INDEX=weights/final_reference_index_paper60_vgg16.pt
+export PLANT_CLASSIFIER_REFERENCE_INDEX=weights/final_reference_index_adapt_vgg16.pt
 export PLANT_CLASSIFIER_BACKBONE=vgg16
 plant-classifier-app
 ```
@@ -44,8 +44,20 @@ The app defaults to the final Paper60 inference profile used by the diagnostics:
 leaf preprocessing, `leaf_interior` local crops, L1 ranking for both stages,
 30 unique genus candidates, and score-based genus weighting. The genus checkpoint,
 species checkpoint, and reference index must be three different files. The index
-must contain separate genus and species reference sets produced by the current
-`plant-classifier-build-index` command.
+must contain separate genus and species reference sets in the current two-stage
+index format.
+
+The `final_scnn_*` checkpoints were adapted with the upper-bound `adapt` split and
+must be paired with `final_reference_index_adapt_vgg16.pt`. The older
+`final_reference_index_paper60_vgg16.pt` uses different references and is not a
+matching app artifact for those checkpoints.
+
+The adapt index contains official-test-derived reference images. Accuracy measured
+on the full official test package is therefore an intentionally biased application
+diagnostic, not an unbiased research metric.
+
+Build or refresh this matching index with the final cell of
+`notebooks/plantclef_colab_upper_bound_diagnostics.ipynb`.
 
 Supported backbones: `vgg16`, `alexnet`, `googlenet`, `efficientnet_b3`,
 `mobilenet_v3_large`.
@@ -70,7 +82,7 @@ To validate the exact artifacts used by the desktop application:
 plant-classifier-eval-artifacts \
   --genus-checkpoint weights/final_scnn_genus_vgg16.pt \
   --species-checkpoint weights/final_scnn_species_vgg16.pt \
-  --reference-index weights/final_reference_index_paper60_vgg16.pt
+  --reference-index weights/final_reference_index_adapt_vgg16.pt
 ```
 
 The expected metadata format is documented in `notebooks/README.md`.

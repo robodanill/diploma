@@ -1044,6 +1044,7 @@ def default_weights_artifacts() -> ModelArtifacts | None:
         "*species*.pt",
     )
     reference_index = _first_existing_weight(
+        "final_reference_index_adapt_*.pt",
         "final_reference_index_*.pt",
         "reference_index_*.pt",
         "*reference*index*.pt",

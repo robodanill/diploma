@@ -30,7 +30,7 @@ def main() -> int:
     parser.add_argument(
         "--reference-index",
         type=Path,
-        default=Path("weights/final_reference_index_paper60_vgg16.pt"),
+        default=Path("weights/final_reference_index_adapt_vgg16.pt"),
     )
     parser.add_argument("--query-split", default="")
     parser.add_argument("--top-k", type=int, nargs="+", default=[1, 3, 5])
