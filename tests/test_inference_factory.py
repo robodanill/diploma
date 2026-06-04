@@ -9,7 +9,9 @@ from plant_classifier.inference.factory import (
 )
 
 
-def test_model_artifacts_defaults_match_final_paper60_inference_profile(tmp_path: Path) -> None:
+def test_model_artifacts_defaults_match_honest_train_only_inference_profile(
+    tmp_path: Path,
+) -> None:
     artifacts = ModelArtifacts(
         genus_checkpoint=tmp_path / "genus.pt",
         species_checkpoint=tmp_path / "species.pt",
@@ -17,18 +19,18 @@ def test_model_artifacts_defaults_match_final_paper60_inference_profile(tmp_path
     )
 
     assert artifacts.preprocessing is True
-    assert artifacts.local_crop_position == "leaf_interior"
+    assert artifacts.local_crop_position == "center"
     assert artifacts.genus_candidates == 30
     assert artifacts.genus_score_mode == "l1"
-    assert artifacts.species_score_mode == "l1"
+    assert artifacts.species_score_mode == "comparator"
     assert artifacts.species_aggregation == "max"
-    assert artifacts.genus_candidate_mode == "unique"
-    assert artifacts.genus_weight_mode == "score"
+    assert artifacts.genus_candidate_mode == "reference"
+    assert artifacts.genus_weight_mode == "frequency"
     assert artifacts.confidence_temperature == 2.0
     assert artifacts.require_two_stage_reference_index is True
 
 
-def test_environment_artifacts_use_final_paper60_profile_by_default(
+def test_environment_artifacts_use_honest_train_only_profile_by_default(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -40,11 +42,11 @@ def test_environment_artifacts_use_final_paper60_profile_by_default(
 
     assert artifacts is not None
     assert artifacts.preprocessing is True
-    assert artifacts.local_crop_position == "leaf_interior"
+    assert artifacts.local_crop_position == "center"
     assert artifacts.genus_score_mode == "l1"
-    assert artifacts.species_score_mode == "l1"
-    assert artifacts.genus_candidate_mode == "unique"
-    assert artifacts.genus_weight_mode == "score"
+    assert artifacts.species_score_mode == "comparator"
+    assert artifacts.genus_candidate_mode == "reference"
+    assert artifacts.genus_weight_mode == "frequency"
     assert artifacts.confidence_temperature == 2.0
     assert artifacts.require_two_stage_reference_index is True
 
@@ -65,10 +67,20 @@ def test_artifact_validation_rejects_reusing_same_file_for_two_roles(tmp_path: P
         _validate_artifacts(artifacts)
 
 
-def test_artifact_validation_rejects_paper60_index_for_final_checkpoints(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "index_name",
+    [
+        "final_reference_index_paper60_vgg16.pt",
+        "final_reference_index_adapt_vgg16.pt",
+    ],
+)
+def test_artifact_validation_rejects_final_checkpoints(
+    tmp_path: Path,
+    index_name: str,
+) -> None:
     genus = tmp_path / "final_scnn_genus_vgg16.pt"
     species = tmp_path / "final_scnn_species_vgg16.pt"
-    index = tmp_path / "final_reference_index_paper60_vgg16.pt"
+    index = tmp_path / index_name
     for path in (genus, species, index):
         path.touch()
 
@@ -78,14 +90,35 @@ def test_artifact_validation_rejects_paper60_index_for_final_checkpoints(tmp_pat
         reference_index=index,
     )
 
-    with pytest.raises(ValueError, match="final_reference_index_adapt_vgg16.pt"):
+    with pytest.raises(ValueError, match="does not load final_scnn"):
         _validate_artifacts(artifacts)
 
 
-def test_artifact_validation_accepts_adapt_index_for_final_checkpoints(tmp_path: Path) -> None:
-    genus = tmp_path / "final_scnn_genus_vgg16.pt"
-    species = tmp_path / "final_scnn_species_vgg16.pt"
+def test_artifact_validation_rejects_non_matching_index_for_honest_checkpoints(
+    tmp_path: Path,
+) -> None:
+    genus = tmp_path / "scnn_genus_vgg16.pt"
+    species = tmp_path / "scnn_species_vgg16.pt"
     index = tmp_path / "final_reference_index_adapt_vgg16.pt"
+    for path in (genus, species, index):
+        path.touch()
+
+    artifacts = ModelArtifacts(
+        genus_checkpoint=genus,
+        species_checkpoint=species,
+        reference_index=index,
+    )
+
+    with pytest.raises(ValueError, match="reference_index_leafscan_vgg16.pt"):
+        _validate_artifacts(artifacts)
+
+
+def test_artifact_validation_accepts_matching_index_for_honest_checkpoints(
+    tmp_path: Path,
+) -> None:
+    genus = tmp_path / "scnn_genus_vgg16.pt"
+    species = tmp_path / "scnn_species_vgg16.pt"
+    index = tmp_path / "reference_index_leafscan_vgg16.pt"
     for path in (genus, species, index):
         path.touch()
 

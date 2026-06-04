@@ -20,17 +20,17 @@ def main() -> int:
     parser.add_argument(
         "--genus-checkpoint",
         type=Path,
-        default=Path("weights/final_scnn_genus_vgg16.pt"),
+        default=Path("weights/scnn_genus_vgg16.pt"),
     )
     parser.add_argument(
         "--species-checkpoint",
         type=Path,
-        default=Path("weights/final_scnn_species_vgg16.pt"),
+        default=Path("weights/scnn_species_vgg16.pt"),
     )
     parser.add_argument(
         "--reference-index",
         type=Path,
-        default=Path("weights/final_reference_index_adapt_vgg16.pt"),
+        default=Path("weights/reference_index_leafscan_vgg16.pt"),
     )
     parser.add_argument("--query-split", default="")
     parser.add_argument("--top-k", type=int, nargs="+", default=[1, 3, 5])

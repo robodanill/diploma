@@ -22,14 +22,14 @@ class ModelArtifacts:
     species_checkpoint: Path
     reference_index: Path
     backbone: str = "vgg16"
-    local_crop_position: str = "leaf_interior"
+    local_crop_position: str = "center"
     preprocessing: bool = True
     genus_candidates: int = 30
     genus_score_mode: str = "l1"
-    species_score_mode: str = "l1"
+    species_score_mode: str = "comparator"
     species_aggregation: str = "max"
-    genus_candidate_mode: str = "unique"
-    genus_weight_mode: str = "score"
+    genus_candidate_mode: str = "reference"
+    genus_weight_mode: str = "frequency"
     confidence_temperature: float = 2.0
     require_two_stage_reference_index: bool = True
 
@@ -74,14 +74,14 @@ def artifacts_from_environment() -> ModelArtifacts | None:
         species_checkpoint=Path(species),
         reference_index=Path(references),
         backbone=os.getenv("PLANT_CLASSIFIER_BACKBONE", "vgg16"),
-        local_crop_position=os.getenv("PLANT_CLASSIFIER_LOCAL_CROP_POSITION", "leaf_interior"),
+        local_crop_position=os.getenv("PLANT_CLASSIFIER_LOCAL_CROP_POSITION", "center"),
         preprocessing=_env_flag("PLANT_CLASSIFIER_PREPROCESSING", default=True),
         genus_candidates=int(os.getenv("PLANT_CLASSIFIER_GENUS_CANDIDATES", "30")),
         genus_score_mode=os.getenv("PLANT_CLASSIFIER_GENUS_SCORE_MODE", "l1"),
-        species_score_mode=os.getenv("PLANT_CLASSIFIER_SPECIES_SCORE_MODE", "l1"),
+        species_score_mode=os.getenv("PLANT_CLASSIFIER_SPECIES_SCORE_MODE", "comparator"),
         species_aggregation=os.getenv("PLANT_CLASSIFIER_SPECIES_AGGREGATION", "max"),
-        genus_candidate_mode=os.getenv("PLANT_CLASSIFIER_GENUS_CANDIDATE_MODE", "unique"),
-        genus_weight_mode=os.getenv("PLANT_CLASSIFIER_GENUS_WEIGHT_MODE", "score"),
+        genus_candidate_mode=os.getenv("PLANT_CLASSIFIER_GENUS_CANDIDATE_MODE", "reference"),
+        genus_weight_mode=os.getenv("PLANT_CLASSIFIER_GENUS_WEIGHT_MODE", "frequency"),
         confidence_temperature=float(os.getenv("PLANT_CLASSIFIER_CONFIDENCE_TEMPERATURE", "2.0")),
         require_two_stage_reference_index=_env_flag(
             "PLANT_CLASSIFIER_REQUIRE_TWO_STAGE_REFERENCE_INDEX",
@@ -117,9 +117,16 @@ def _validate_artifacts(artifacts: ModelArtifacts) -> None:
         artifacts.genus_checkpoint.name.lower(),
         artifacts.species_checkpoint.name.lower(),
     )
-    if any(name.startswith("final_scnn_") for name in checkpoint_names):
-        if "adapt" not in artifacts.reference_index.name.lower():
+    reference_index_name = artifacts.reference_index.name.lower()
+    if checkpoint_names == ("scnn_genus_vgg16.pt", "scnn_species_vgg16.pt"):
+        if reference_index_name != "reference_index_leafscan_vgg16.pt":
             raise ValueError(
-                "final_scnn_* checkpoints require the matching "
-                "final_reference_index_adapt_vgg16.pt reference index"
+                "The honest scnn_genus_vgg16.pt and scnn_species_vgg16.pt checkpoints "
+                "require the matching reference_index_leafscan_vgg16.pt reference index"
             )
+    if any(name.startswith("final_scnn_") for name in checkpoint_names):
+        raise ValueError(
+            "The honest demo branch does not load final_scnn_* checkpoints. "
+            "Use scnn_genus_vgg16.pt, scnn_species_vgg16.pt, and "
+            "reference_index_leafscan_vgg16.pt"
+        )

@@ -55,6 +55,9 @@ from plant_classifier.inference import (
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_WEIGHTS_DIR = PROJECT_ROOT / "weights"
+HONEST_GENUS_CHECKPOINT_NAME = "scnn_genus_vgg16.pt"
+HONEST_SPECIES_CHECKPOINT_NAME = "scnn_species_vgg16.pt"
+HONEST_REFERENCE_INDEX_NAME = "reference_index_leafscan_vgg16.pt"
 
 
 class PredictionSignals(QObject):
@@ -1028,8 +1031,16 @@ def format_confidence(score: float) -> str:
 
 
 def model_artifact_summary(artifacts: ModelArtifacts) -> str:
+    profile = ""
+    if (
+        artifacts.genus_checkpoint.name == HONEST_GENUS_CHECKPOINT_NAME
+        and artifacts.species_checkpoint.name == HONEST_SPECIES_CHECKPOINT_NAME
+        and artifacts.reference_index.name == HONEST_REFERENCE_INDEX_NAME
+    ):
+        profile = "Профиль: честный train-only\n"
     return (
-        f"Архитектура: {artifacts.backbone}\n"
+        profile
+        + f"Архитектура: {artifacts.backbone}\n"
         f"Веса рода: {artifacts.genus_checkpoint.name}\n"
         f"Веса вида: {artifacts.species_checkpoint.name}\n"
         f"Индекс эталонов: {artifacts.reference_index.name}"
@@ -1040,40 +1051,26 @@ def default_weights_artifacts() -> ModelArtifacts | None:
     if not DEFAULT_WEIGHTS_DIR.is_dir():
         return None
 
-    genus_checkpoint = _first_existing_weight(
-        "final_scnn_genus_*.pt",
-        "scnn_genus_*_best.pt",
-        "scnn_genus_*.pt",
-        "*genus*.pt",
-    )
-    species_checkpoint = _first_existing_weight(
-        "final_scnn_species_*.pt",
-        "scnn_species_*_best.pt",
-        "scnn_species_*.pt",
-        "*species*.pt",
-    )
-    reference_index = _first_existing_weight(
-        "final_reference_index_adapt_*.pt",
-        "final_reference_index_*.pt",
-        "reference_index_*.pt",
-        "*reference*index*.pt",
-    )
-    found = {
-        "веса рода": genus_checkpoint,
-        "веса вида": species_checkpoint,
-        "индекс эталонов": reference_index,
+    required = {
+        "веса рода": DEFAULT_WEIGHTS_DIR / HONEST_GENUS_CHECKPOINT_NAME,
+        "веса вида": DEFAULT_WEIGHTS_DIR / HONEST_SPECIES_CHECKPOINT_NAME,
+        "индекс эталонов": DEFAULT_WEIGHTS_DIR / HONEST_REFERENCE_INDEX_NAME,
     }
-    if not any(found.values()):
+    available_names = sorted(path.name for path in DEFAULT_WEIGHTS_DIR.glob("*.pt"))
+    if not available_names:
         return None
-    missing = [label for label, path in found.items() if path is None]
+    missing = [path.name for path in required.values() if not path.is_file()]
     if missing:
-        found_names = ", ".join(path.name for path in found.values() if path is not None)
         raise FileNotFoundError(
-            "Папка weights содержит неполный набор артефактов. "
-            "Нужны веса рода, веса вида и индекс эталонов. "
-            f"Отсутствуют: {', '.join(missing)}. Найдены: {found_names}."
+            "Для честного train-only профиля нужны согласованные артефакты: "
+            f"{HONEST_GENUS_CHECKPOINT_NAME}, {HONEST_SPECIES_CHECKPOINT_NAME}, "
+            f"{HONEST_REFERENCE_INDEX_NAME}. "
+            f"Отсутствуют: {', '.join(missing)}. Найдены: {', '.join(available_names)}."
         )
 
+    genus_checkpoint = required["веса рода"]
+    species_checkpoint = required["веса вида"]
+    reference_index = required["индекс эталонов"]
     return ModelArtifacts(
         genus_checkpoint=genus_checkpoint,
         species_checkpoint=species_checkpoint,
@@ -1084,14 +1081,6 @@ def default_weights_artifacts() -> ModelArtifacts | None:
             reference_index.name,
         ),
     )
-
-
-def _first_existing_weight(*patterns: str) -> Path | None:
-    for pattern in patterns:
-        matches = sorted(DEFAULT_WEIGHTS_DIR.glob(pattern))
-        if matches:
-            return matches[0]
-    return None
 
 
 def _infer_backbone(*names: str) -> str:

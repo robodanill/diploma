@@ -33,37 +33,45 @@ and `leaf.xml`. The app can also read a `metadata.csv` in the image folder with
 After training, the app can load the exported artifacts through `Load Model`, or via:
 
 ```bash
-export PLANT_CLASSIFIER_GENUS_CHECKPOINT=weights/final_scnn_genus_vgg16.pt
-export PLANT_CLASSIFIER_SPECIES_CHECKPOINT=weights/final_scnn_species_vgg16.pt
-export PLANT_CLASSIFIER_REFERENCE_INDEX=weights/final_reference_index_adapt_vgg16.pt
+export PLANT_CLASSIFIER_GENUS_CHECKPOINT=weights/scnn_genus_vgg16.pt
+export PLANT_CLASSIFIER_SPECIES_CHECKPOINT=weights/scnn_species_vgg16.pt
+export PLANT_CLASSIFIER_REFERENCE_INDEX=weights/reference_index_leafscan_vgg16.pt
 export PLANT_CLASSIFIER_BACKBONE=vgg16
 plant-classifier-app
 ```
 
-The app defaults to the final Paper60 inference profile used by the diagnostics:
-leaf preprocessing, `leaf_interior` local crops, L1 ranking for both stages,
-30 unique genus candidates, and score-based genus weighting. The genus checkpoint,
-species checkpoint, and reference index must be three different files. The index
-must contain separate genus and species reference sets in the current two-stage
-index format.
+This branch defaults to the honest train-only VGG16 artifact bundle. Put these
+three exact files in `weights/` before starting the app:
+
+```text
+scnn_genus_vgg16.pt
+scnn_species_vgg16.pt
+reference_index_leafscan_vgg16.pt
+```
+
+They are stored on Google Drive under:
+
+```text
+/content/drive/MyDrive/diploma_checkpoints/scnn_genus_vgg16.pt
+/content/drive/MyDrive/diploma_checkpoints/scnn_species_vgg16.pt
+/content/drive/MyDrive/diploma_checkpoints/reference_index_leafscan_vgg16.pt
+```
+
+Keep the three files together: the index contains embeddings calculated by these
+specific checkpoints and must not be mixed with `final_*`, `adapt`, or checkpoints
+from another timestamped run. The two root-level checkpoint files are synchronized
+copies of the matching `_best` checkpoints used when the index was built. This
+bundle uses leaf preprocessing, center local crops, L1 genus ranking, comparator
+species scoring, 30 reference-image genus candidates, and frequency-based genus
+weighting. The index contains separate genus and species references from the
+Paper60 training subset only. The app rejects `final_scnn_*` checkpoints in this
+branch.
 
 Displayed confidence values are a deterministic, rank-preserving normalization of
 the model's relative similarity scores. They sum to one across the considered
 candidates, but they are not statistically calibrated probabilities and do not
 change the predicted class or evaluation accuracy. The display temperature can be
 overridden with `PLANT_CLASSIFIER_CONFIDENCE_TEMPERATURE`.
-
-The `final_scnn_*` checkpoints were adapted with the upper-bound `adapt` split and
-must be paired with `final_reference_index_adapt_vgg16.pt`. The older
-`final_reference_index_paper60_vgg16.pt` uses different references and is not a
-matching app artifact for those checkpoints.
-
-The adapt index contains official-test-derived reference images. Accuracy measured
-on the full official test package is therefore an intentionally biased application
-diagnostic, not an unbiased research metric.
-
-Build or refresh this matching index with the final cell of
-`notebooks/plantclef_colab_upper_bound_diagnostics.ipynb`.
 
 Supported backbones: `vgg16`, `alexnet`, `googlenet`, `efficientnet_b3`,
 `mobilenet_v3_large`.
@@ -85,10 +93,7 @@ plant-classifier-build-index --config configs/leafscan_paper60_training.yaml --g
 To validate the exact artifacts used by the desktop application:
 
 ```bash
-plant-classifier-eval-artifacts \
-  --genus-checkpoint weights/final_scnn_genus_vgg16.pt \
-  --species-checkpoint weights/final_scnn_species_vgg16.pt \
-  --reference-index weights/final_reference_index_adapt_vgg16.pt
+plant-classifier-eval-artifacts
 ```
 
 The expected metadata format is documented in `notebooks/README.md`.
