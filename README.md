@@ -18,7 +18,7 @@ The repository contains:
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
-pip install -e '.[app]'
+pip install -e '.[app,ml]'
 plant-classifier-app
 ```
 
