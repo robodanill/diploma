@@ -7,12 +7,13 @@ Source: `1-s2.0-S0925231221014934-main (1).pdf`.
 - The PlantCLEF numbers in the paper match the `Content=LeafScan` subset, not our earlier `Content=Leaf` subset.
 - The reported PlantCLEF 2015 result is on the predefined PlantCLEF 2015 test set, not on a validation split created from training images.
 - Their PlantCLEF leaf test set has 221 leaf images, 43 genus classes, and 60 species classes.
-- For the final PlantCLEF comparison, S-CNN uses the 60 official test species and six training images per species: 360 S-CNN training images.
+- For the final PlantCLEF comparison, the paper explicitly says the S-CNN uses 360 images, i.e. the 60 official test species with six training images per species.
+- S-CNN(A) is trained with genus labels, but the paper does not explicitly state that its training subset is 43 genera * 6 images. Treat a 258-image genus-balanced subset as a diagnostic variant, not the strict paper default.
 - The PlantCLEF score is the LifeCLEF `S` metric, which rewards the inverse rank of the first correct match. It is not exactly the same as our current top-k genus retrieval accuracy.
 
 ## Data protocol
 
-- They emphasize few-sample metric learning: only six training images per species are used to train the S-CNN models.
+- They emphasize few-sample metric learning: six training images per species are used in the final PlantCLEF S-CNN comparison.
 - The train pool for the paper-style final run is therefore the 6,527 training images belonging to the 60 species present in the official test set, then a six-per-species S-CNN subset is sampled from that pool.
 - PlantCLEF training subset in the paper: 12,605 training images when considering the taxonomic groups used for the method.
 - For S-CNN training pair counts on PlantCLEF 2015:
@@ -82,13 +83,13 @@ Source: `1-s2.0-S0925231221014934-main (1).pdf`.
 - We initially evaluated references and queries by splitting the same validation metadata, while the paper evaluates training references against the predefined test set.
 - We do not yet implement full two-stage species fusion; most current diagnostics are genus-only retrieval.
 - We currently do not perform leaf segmentation/Otsu/top-hat/bounding-box preprocessing; we resize raw leaf images.
-- Our training uses all available training records and dynamic random pairs; the paper stresses six samples per species and fixed pair counts per taxonomic group.
+- A possible diagnostic variant is to balance S-CNN(A) by genus, because species-balanced sampling overrepresents multi-species genera in genus-stage pair training. The paper does not explicitly confirm this as the PlantCLEF protocol.
 - Our standalone eval should use train references + PlantCLEF test queries for fairer comparison.
 
 ## Next implementation implications
 
 - Add/use real PlantCLEF 2015 test metadata and evaluate against it.
-- Build references from train, preferably `Nr=6` per species, then query on test images.
+- Build references from train, preferably `Nr=6` per species, then query on test images. Genus references should be derived from those species references with coverage inside genus where possible.
 - Implement two-stage inference/evaluation with `Rk=30`, S-CNN(A) genus candidates, S-CNN(B) local species scoring, and weighted fusion.
 - Add preprocessing closer to the paper: leaf segmentation/bounding box before resize, plus center crop for local view.
 - Consider reverting pair counts closer to paper for strict reproduction: genus 400/600, species 800/1200, batch 32, 2048 iterations, rather than very long epochs.

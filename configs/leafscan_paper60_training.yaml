@@ -19,20 +19,38 @@ views:
   local:
     image_size: 224
     crop_size: 32
-    crop_position: center
+    crop_position: leaf_interior
 
 preprocessing:
   enabled: true
   leaf_bbox: true
 
 pair_sampling:
+  strategy: pair_uniform
   positive_per_epoch:
     genus: 400
     species: 800
   negative_per_epoch:
     genus: 600
     species: 1200
-  hard_negative_ratio: 0.0
+  hard_negative_ratio:
+    genus: 0.0
+    species: 0.60
+  targeted_negative_ratio:
+    genus: 0.05
+    species: 0.0
+  targeted_negative_label_pairs:
+    genus:
+      - [Fraxinus, Acer]
+      - [Fraxinus, Viburnum]
+      - [Ailanthus, Acer]
+      - [Betula, Acer]
+      - [Corylus, Betula]
+      - [Crataegus, Sorbus]
+      - [Lippia, Prunus]
+      - [Populus, Salix]
+      - [Platanus, Acer]
+      - [Viburnum, Acer]
 
 model:
   backbone: vgg16
@@ -43,8 +61,8 @@ model:
 training:
   batch_size: 32
   dynamic_pairs: true
-  epochs: 80
-  max_iterations: 2048
+  epochs: 96
+  max_iterations: 4096
   num_workers: 2
   optimizer: sgd
   learning_rate: 0.001
@@ -52,9 +70,19 @@ training:
   lr_decay_step: 512
   lr_decay_gamma: 0.5
   split: train
+  checkpoint_every_epochs:
+    genus: 10
+    species: 0
 
 evaluation:
-  enabled: false
+  enabled: true
+  source: train_holdout
+  split: train
+  seed: 777
+  references_per_genus: 6
+  queries_per_genus: 5
+  top_k: [5, 15, 30]
+  score_mode: l1
 
 inference:
   references_per_class: 6

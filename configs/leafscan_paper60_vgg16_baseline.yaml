@@ -1,0 +1,43 @@
+seed: 42
+
+dataset:
+  name: PlantCLEF2015LeafScanPaper60VGG16Baseline
+  root: data/plantclef2015/leafscan
+  metadata: data/plantclef2015/leafscan_paper60_metadata.csv
+  image_column: image_path
+  family_column: family
+  genus_column: genus
+  species_column: species
+  subset:
+    min_images_per_species: 6
+    max_images_per_species: 6
+    seed: 42
+
+views:
+  global:
+    image_size: 224
+  local:
+    crop_size: 32
+
+preprocessing:
+  enabled: true
+  leaf_bbox: true
+
+model:
+  backbone: vgg16
+  pretrained: true
+
+training:
+  batch_size: 32
+  epochs: 200
+  max_iterations: 2048
+  num_workers: 2
+  optimizer: sgd
+  learning_rate: 0.001
+  momentum: 0.9
+  lr_decay_step: 512
+  lr_decay_gamma: 0.5
+  split: train
+
+evaluation:
+  top_k: [1, 3, 5]

@@ -1,9 +1,9 @@
 seed: 42
 
 dataset:
-  name: PlantCLEF2015LeafSmokeMobileNetV3Large
-  root: data/plantclef2015/leaf
-  metadata: data/plantclef2015/metadata_split.csv
+  name: PlantCLEF2015LeafScanSmokeMobileNetV3Large
+  root: data/plantclef2015/leafscan
+  metadata: data/plantclef2015/leafscan_metadata_split.csv
   image_column: image_path
   family_column: family
   genus_column: genus
@@ -20,6 +20,10 @@ views:
     image_size: 224
     crop_size: 32
     crop_position: center
+
+preprocessing:
+  enabled: true
+  leaf_bbox: true
 
 pair_sampling:
   positive_per_epoch:

@@ -48,6 +48,7 @@ from plant_classifier.inference import (
     ModelArtifacts,
     PredictionLabel,
     Predictor,
+    StubPredictor,
     create_predictor,
 )
 
@@ -191,9 +192,11 @@ class ResultsDialog(QDialog):
         correct_count = sum(
             1 for correctness in correctness_by_prediction.values() if correctness.is_correct
         )
-        accuracy = correct_count / len(predictions) * 100 if predictions else 0.0
+        evaluated_count = len(correctness_by_prediction)
+        accuracy = correct_count / evaluated_count * 100 if evaluated_count else 0.0
         summary = QLabel(
             f"Количество изображений: {len(predictions)}\n"
+            f"Изображений с разметкой: {evaluated_count}\n"
             f"Количество правильных видов: {correct_count}\n"
             f"Точность: {accuracy:.2f}%"
         )
@@ -363,6 +366,8 @@ class MainWindow(QMainWindow):
         self._build_actions()
         self._build_ui()
         self._apply_styles()
+        if isinstance(self.predictor, StubPredictor):
+            self.statusBar().showMessage("Модель не загружена")
 
     def _build_actions(self) -> None:
         self.open_images_action = QAction("Открыть изображения", self)
@@ -373,6 +378,7 @@ class MainWindow(QMainWindow):
 
         self.run_action = QAction("Распознать", self)
         self.run_action.triggered.connect(self.run_predictions)
+        self.run_action.setEnabled(not isinstance(self.predictor, StubPredictor))
 
         self.clear_action = QAction("Очистить", self)
         self.clear_action.triggered.connect(self.clear_all)
@@ -688,6 +694,13 @@ class MainWindow(QMainWindow):
         return display_path(path)
 
     def run_predictions(self) -> None:
+        if isinstance(self.predictor, StubPredictor):
+            QMessageBox.warning(
+                self,
+                "Модель не загружена",
+                "Загрузите веса рода, веса вида и индекс эталонов перед распознаванием.",
+            )
+            return
         if not self.image_paths:
             QMessageBox.information(
                 self,
@@ -751,14 +764,19 @@ class MainWindow(QMainWindow):
             return
 
     def try_load_default_weights(self) -> None:
-        artifacts = default_weights_artifacts()
+        try:
+            artifacts = default_weights_artifacts()
+        except Exception as exc:
+            QMessageBox.warning(self, "Неполный набор весов", str(exc))
+            self.statusBar().showMessage("Модель не загружена")
+            return
         if artifacts is None:
             return
         if self._load_model_artifacts(artifacts, show_success=False):
             QMessageBox.information(
                 self,
                 "Веса загружены",
-                "Веса из папки weights загружены.",
+                "Веса из папки weights загружены.\n\n" + model_artifact_summary(artifacts),
             )
 
     def _load_model_artifacts(self, artifacts: ModelArtifacts, *, show_success: bool) -> bool:
@@ -769,8 +787,9 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("Не удалось загрузить модель")
             return False
 
-        message = f"Загружены веса модели ({artifacts.backbone})"
-        self.statusBar().showMessage(message)
+        message = model_artifact_summary(artifacts)
+        self.run_action.setEnabled(True)
+        self.statusBar().showMessage(f"Загружена модель ({artifacts.backbone})")
         if show_success:
             QMessageBox.information(self, "Модель загружена", message)
         return True
@@ -999,6 +1018,15 @@ def canonical_binomial(genus: str, species: str) -> str:
     return " ".join(tokens[:2])
 
 
+def model_artifact_summary(artifacts: ModelArtifacts) -> str:
+    return (
+        f"Архитектура: {artifacts.backbone}\n"
+        f"Веса рода: {artifacts.genus_checkpoint.name}\n"
+        f"Веса вида: {artifacts.species_checkpoint.name}\n"
+        f"Индекс эталонов: {artifacts.reference_index.name}"
+    )
+
+
 def default_weights_artifacts() -> ModelArtifacts | None:
     if not DEFAULT_WEIGHTS_DIR.is_dir():
         return None
@@ -1020,8 +1048,21 @@ def default_weights_artifacts() -> ModelArtifacts | None:
         "reference_index_*.pt",
         "*reference*index*.pt",
     )
-    if not (genus_checkpoint and species_checkpoint and reference_index):
+    found = {
+        "веса рода": genus_checkpoint,
+        "веса вида": species_checkpoint,
+        "индекс эталонов": reference_index,
+    }
+    if not any(found.values()):
         return None
+    missing = [label for label, path in found.items() if path is None]
+    if missing:
+        found_names = ", ".join(path.name for path in found.values() if path is not None)
+        raise FileNotFoundError(
+            "Папка weights содержит неполный набор артефактов. "
+            "Нужны веса рода, веса вида и индекс эталонов. "
+            f"Отсутствуют: {', '.join(missing)}. Найдены: {found_names}."
+        )
 
     return ModelArtifacts(
         genus_checkpoint=genus_checkpoint,

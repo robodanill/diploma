@@ -154,3 +154,91 @@ def limit_records_by_species(
             break
 
     return selected
+
+
+def limit_records_by_genus(
+    records: list[ImageRecord],
+    max_genera: int | None = None,
+    min_images_per_genus: int = 1,
+    max_images_per_genus: int | None = None,
+    seed: int | None = None,
+    cover_species: bool = True,
+) -> list[ImageRecord]:
+    """Select a genus-balanced subset, optionally covering species inside each genus."""
+
+    if not cover_species:
+        grouped: dict[str, list[ImageRecord]] = {}
+        for record in sorted(records, key=lambda item: (item.genus, item.species, str(item.image_path))):
+            grouped.setdefault(record.genus, []).append(record)
+        return _limit_grouped_records(
+            grouped,
+            max_labels=max_genera,
+            min_images_per_label=min_images_per_genus,
+            max_images_per_label=max_images_per_genus,
+            seed=seed,
+        )
+
+    by_genus: dict[str, dict[str, list[ImageRecord]]] = defaultdict(lambda: defaultdict(list))
+    for record in sorted(records, key=lambda item: (item.genus, item.species, str(item.image_path))):
+        by_genus[record.genus][record.species].append(record)
+
+    rng = random.Random(seed) if seed is not None else None
+    selected: list[ImageRecord] = []
+    genera_seen = 0
+    for genus in sorted(by_genus):
+        species_groups = by_genus[genus]
+        total_genus_records = sum(len(items) for items in species_groups.values())
+        if total_genus_records < min_images_per_genus:
+            continue
+        limit = max_images_per_genus or total_genus_records
+        species_order = sorted(species_groups)
+        if rng is not None:
+            rng.shuffle(species_order)
+            for species in species_order:
+                rng.shuffle(species_groups[species])
+        cursors = {species: 0 for species in species_order}
+        selected_for_genus: list[ImageRecord] = []
+        while len(selected_for_genus) < limit:
+            added = False
+            for species in species_order:
+                species_records = species_groups[species]
+                cursor = cursors[species]
+                if cursor >= len(species_records):
+                    continue
+                selected_for_genus.append(species_records[cursor])
+                cursors[species] = cursor + 1
+                added = True
+                if len(selected_for_genus) >= limit:
+                    break
+            if not added:
+                break
+        selected.extend(selected_for_genus)
+        genera_seen += 1
+        if max_genera is not None and genera_seen >= max_genera:
+            break
+
+    return selected
+
+
+def _limit_grouped_records(
+    grouped: dict[str, list[ImageRecord]],
+    max_labels: int | None,
+    min_images_per_label: int,
+    max_images_per_label: int | None,
+    seed: int | None,
+) -> list[ImageRecord]:
+    rng = random.Random(seed) if seed is not None else None
+    selected: list[ImageRecord] = []
+    labels_seen = 0
+    for label in sorted(grouped):
+        label_records = list(grouped[label])
+        if len(label_records) < min_images_per_label:
+            continue
+        if rng is not None:
+            rng.shuffle(label_records)
+        limit = max_images_per_label or len(label_records)
+        selected.extend(label_records[:limit])
+        labels_seen += 1
+        if max_labels is not None and labels_seen >= max_labels:
+            break
+    return selected

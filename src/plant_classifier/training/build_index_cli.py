@@ -15,6 +15,7 @@ from plant_classifier.data import (
 )
 from plant_classifier.inference.scnn import ReferenceEmbedding, save_reference_index
 from plant_classifier.models.siamese import BackboneSpec, build_siamese_network
+from plant_classifier.training.genus_eval import select_genus_references
 from plant_classifier.training.image_pairs import build_image_transform
 
 
@@ -33,9 +34,17 @@ def main() -> int:
         config.get("inference", {}).get("reference_split", config["training"].get("split", "train")),
     )
     records = _apply_subset(records, config["dataset"])
-    references = _select_references(
+    references_per_class = int(config["inference"]["references_per_class"])
+    genus_references_per_genus = int(
+        config["inference"].get("genus_references_per_genus", references_per_class)
+    )
+    genus_references = select_genus_references(
         records=records,
-        references_per_class=int(config["inference"]["references_per_class"]),
+        references_per_genus=genus_references_per_genus,
+    )
+    species_references = _select_references(
+        records=records,
+        references_per_class=references_per_class,
     )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -61,28 +70,33 @@ def main() -> int:
         "local",
         image_size=int(config["views"]["local"]["image_size"]),
         crop_size=int(config["views"]["local"]["crop_size"]),
+        crop_position=_local_crop_position(config),
         preprocessing=_preprocessing_enabled(config),
     )
 
-    embeddings: list[ReferenceEmbedding] = []
     with torch.inference_mode():
-        for record in references:
-            image = _load_rgb(record.image_path)
-            global_tensor = global_transform(image).unsqueeze(0).to(device)
-            local_tensor = local_transform(image).unsqueeze(0).to(device)
-            embeddings.append(
-                ReferenceEmbedding(
-                    image_path=record.image_path,
-                    family=record.family,
-                    genus=record.genus,
-                    species=record.species,
-                    global_embedding=genus_model.embed(global_tensor).squeeze(0).cpu(),
-                    local_embedding=species_model.embed(local_tensor).squeeze(0).cpu(),
-                )
-            )
+        genus_embeddings = _build_embeddings(
+            records=genus_references,
+            genus_model=genus_model,
+            species_model=species_model,
+            global_transform=global_transform,
+            local_transform=local_transform,
+            device=device,
+        )
+        species_embeddings = _build_embeddings(
+            records=species_references,
+            genus_model=genus_model,
+            species_model=species_model,
+            global_transform=global_transform,
+            local_transform=local_transform,
+            device=device,
+        )
 
-    save_reference_index(embeddings, args.output)
-    print(f"saved {len(embeddings)} reference embeddings to {args.output}")
+    save_reference_index(species_embeddings, args.output, genus_references=genus_embeddings)
+    print(
+        f"saved {len(genus_embeddings)} genus and "
+        f"{len(species_embeddings)} species reference embeddings to {args.output}"
+    )
     return 0
 
 
@@ -129,9 +143,39 @@ def _select_references(records: list[ImageRecord], references_per_class: int) ->
     return references
 
 
+def _build_embeddings(
+    records: list[ImageRecord],
+    genus_model,
+    species_model,
+    global_transform,
+    local_transform,
+    device: torch.device,
+) -> list[ReferenceEmbedding]:
+    embeddings: list[ReferenceEmbedding] = []
+    for record in records:
+        image = _load_rgb(record.image_path)
+        global_tensor = global_transform(image).unsqueeze(0).to(device)
+        local_tensor = local_transform(image).unsqueeze(0).to(device)
+        embeddings.append(
+            ReferenceEmbedding(
+                image_path=record.image_path,
+                family=record.family,
+                genus=record.genus,
+                species=record.species,
+                global_embedding=genus_model.embed(global_tensor).squeeze(0).cpu(),
+                local_embedding=species_model.embed(local_tensor).squeeze(0).cpu(),
+            )
+        )
+    return embeddings
+
+
 def _preprocessing_enabled(config: dict) -> bool:
     preprocessing = config.get("preprocessing", {})
     return bool(preprocessing.get("enabled", preprocessing.get("leaf_bbox", False)))
+
+
+def _local_crop_position(config: dict) -> str:
+    return str(config.get("views", {}).get("local", {}).get("crop_position", "center"))
 
 
 def _load_rgb(path: Path):

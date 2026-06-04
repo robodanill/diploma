@@ -8,7 +8,7 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 
 from plant_classifier.data import PairRecord
-from plant_classifier.preprocessing.views import LeafBoundingBoxCrop
+from plant_classifier.preprocessing.views import LeafBoundingBoxCrop, LeafInteriorCrop
 
 
 class PairImageDataset(Dataset[tuple[Tensor, Tensor, Tensor]]):
@@ -20,14 +20,17 @@ class PairImageDataset(Dataset[tuple[Tensor, Tensor, Tensor]]):
         view: str,
         image_size: int = 224,
         crop_size: int = 32,
+        crop_position: str = "center",
         preprocessing: bool = False,
     ) -> None:
         self.pairs = pairs
         self.view = view
+        self._tensor_cache: dict[Path, Tensor] = {}
         self.transform = build_image_transform(
             view=view,
             image_size=image_size,
             crop_size=crop_size,
+            crop_position=crop_position,
             preprocessing=preprocessing,
         )
 
@@ -36,10 +39,15 @@ class PairImageDataset(Dataset[tuple[Tensor, Tensor, Tensor]]):
 
     def __getitem__(self, index: int) -> tuple[Tensor, Tensor, Tensor]:
         pair = self.pairs[index]
-        left = _load_rgb(pair.left)
-        right = _load_rgb(pair.right)
         label = Tensor([float(pair.label)]).squeeze(0)
-        return self.transform(left), self.transform(right), label
+        return self._load_transformed(pair.left), self._load_transformed(pair.right), label
+
+    def _load_transformed(self, path: Path) -> Tensor:
+        tensor = self._tensor_cache.get(path)
+        if tensor is None:
+            tensor = self.transform(_load_rgb(path))
+            self._tensor_cache[path] = tensor
+        return tensor
 
 
 def _load_rgb(path: Path) -> Image.Image:
@@ -51,6 +59,7 @@ def build_image_transform(
     view: str,
     image_size: int,
     crop_size: int,
+    crop_position: str = "center",
     preprocessing: bool = False,
 ) -> transforms.Compose:
     steps: list[object] = []
@@ -63,9 +72,16 @@ def build_image_transform(
         )
 
     if view == "local":
+        crop_position = crop_position.lower()
+        if crop_position == "center":
+            local_crop = transforms.CenterCrop(crop_size)
+        elif crop_position in {"leaf_interior", "green_aware"}:
+            local_crop = LeafInteriorCrop(crop_size=crop_size)
+        else:
+            raise ValueError(f"Unsupported local crop position: {crop_position}")
         steps.extend(
             [
-                transforms.CenterCrop(crop_size),
+                local_crop,
                 transforms.Resize((image_size, image_size)),
             ]
         )

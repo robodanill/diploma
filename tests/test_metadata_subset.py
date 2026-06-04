@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from plant_classifier.data import ImageRecord, limit_records_by_species
+from plant_classifier.data import ImageRecord, limit_records_by_genus, limit_records_by_species
 
 
 def test_limit_records_by_species_selects_deterministic_balanced_subset() -> None:
@@ -51,3 +51,33 @@ def test_limit_records_by_species_can_sample_records_by_seed() -> None:
     assert len(first) == 4
     assert [record.species for record in first].count("A") == 2
     assert [record.species for record in first].count("B") == 2
+
+
+def test_limit_records_by_genus_balances_genera_and_covers_species() -> None:
+    records = [
+        ImageRecord(Path("prunus_a1.jpg"), "F", "Prunus", "Prunus alpha"),
+        ImageRecord(Path("prunus_a2.jpg"), "F", "Prunus", "Prunus alpha"),
+        ImageRecord(Path("prunus_b1.jpg"), "F", "Prunus", "Prunus beta"),
+        ImageRecord(Path("prunus_b2.jpg"), "F", "Prunus", "Prunus beta"),
+        ImageRecord(Path("prunus_c1.jpg"), "F", "Prunus", "Prunus gamma"),
+        ImageRecord(Path("prunus_c2.jpg"), "F", "Prunus", "Prunus gamma"),
+        ImageRecord(Path("acer_a1.jpg"), "F", "Acer", "Acer alpha"),
+        ImageRecord(Path("acer_a2.jpg"), "F", "Acer", "Acer alpha"),
+        ImageRecord(Path("acer_a3.jpg"), "F", "Acer", "Acer alpha"),
+        ImageRecord(Path("acer_a4.jpg"), "F", "Acer", "Acer alpha"),
+    ]
+
+    subset = limit_records_by_genus(
+        records,
+        min_images_per_genus=3,
+        max_images_per_genus=3,
+    )
+
+    assert [record.image_path for record in subset] == [
+        Path("acer_a1.jpg"),
+        Path("acer_a2.jpg"),
+        Path("acer_a3.jpg"),
+        Path("prunus_a1.jpg"),
+        Path("prunus_b1.jpg"),
+        Path("prunus_c1.jpg"),
+    ]

@@ -7,13 +7,19 @@ import yaml
 from torch.utils.data import DataLoader
 
 from plant_classifier.data import (
+    ImageRecord,
     filter_records_by_split,
+    limit_records_by_genus,
     limit_records_by_species,
     load_metadata_csv,
     sample_pairs,
 )
 from plant_classifier.models.siamese import BackboneSpec, build_siamese_network
-from plant_classifier.training.genus_eval import evaluate_genus_retrieval, prepare_genus_eval_records
+from plant_classifier.training.genus_eval import (
+    evaluate_genus_retrieval,
+    prepare_genus_eval_records,
+    select_genus_references,
+)
 from plant_classifier.training.image_pairs import PairImageDataset
 from plant_classifier.training.loop import train_siamese, train_siamese_with_dynamic_pairs
 from plant_classifier.training.validation import validate_records_exist
@@ -38,7 +44,7 @@ def main() -> int:
     )
     validate_records_exist(records)
     train_records = filter_records_by_split(records, config["training"].get("split", "train"))
-    train_records = _apply_subset(train_records, dataset_config)
+    train_records = _apply_subset(train_records, dataset_config, stage=args.stage)
     validate_records_exist(train_records)
     print(
         f"training split={config['training'].get('split', 'train')} "
@@ -70,9 +76,22 @@ def main() -> int:
             checkpoint_path=args.output,
             positive_count=int(config["pair_sampling"]["positive_per_epoch"][stage]),
             negative_count=int(config["pair_sampling"]["negative_per_epoch"][stage]),
-            hard_negative_ratio=float(config["pair_sampling"].get("hard_negative_ratio", 0.0)),
+            hard_negative_ratio=_stage_float(
+                config["pair_sampling"].get("hard_negative_ratio", 0.0),
+                stage,
+            ),
+            targeted_negative_ratio=_stage_float(
+                config["pair_sampling"].get("targeted_negative_ratio", 0.0),
+                stage,
+            ),
+            targeted_negative_label_pairs=_stage_label_pairs(
+                config["pair_sampling"].get("targeted_negative_label_pairs", []),
+                stage,
+            ),
+            pair_sampling_strategy=str(config["pair_sampling"].get("strategy", "label_uniform")),
             image_size=int(config["views"][view]["image_size"]),
             crop_size=int(config["views"].get("local", {}).get("crop_size", 32)),
+            crop_position=_local_crop_position(config),
             preprocessing=_preprocessing_enabled(config),
             batch_size=int(config["training"]["batch_size"]),
             epochs=int(config["training"]["epochs"]),
@@ -83,8 +102,12 @@ def main() -> int:
             max_iterations=_optional_int(config["training"].get("max_iterations")),
             num_workers=int(config["training"].get("num_workers", 2)),
             seed=int(config["seed"]),
-            eval_fn=_build_eval_fn(config, records, stage),
+            eval_fn=_build_eval_fn(config, records, train_records, stage),
             progress_every=int(config["training"].get("progress_every_batches", 5)),
+            checkpoint_every_epochs=_stage_int(
+                config["training"].get("checkpoint_every_epochs", 0),
+                stage,
+            ),
         )
     else:
         _train_static_pairs(config, train_records, stage, view, model, args.output)
@@ -96,10 +119,20 @@ def _load_config(path: Path) -> dict:
         return yaml.safe_load(file)
 
 
-def _apply_subset(records: list, dataset_config: dict) -> list:
+def _apply_subset(records: list, dataset_config: dict, stage: str) -> list:
     subset = dataset_config.get("subset")
     if not subset:
         return records
+    stage_subset = subset.get("by_stage", {}).get(stage)
+    if stage_subset:
+        level = str(stage_subset.get("level", stage))
+        limited = _apply_stage_subset(records, stage_subset, level)
+        print(
+            f"using {stage} subset by {level}: {len(limited)} images "
+            f"from {len({record.label_for(level) for record in limited})} {level} labels",
+            flush=True,
+        )
+        return limited
     limited = limit_records_by_species(
         records,
         max_species=subset.get("max_species"),
@@ -114,13 +147,46 @@ def _apply_subset(records: list, dataset_config: dict) -> list:
     return limited
 
 
+def _apply_stage_subset(records: list, subset: dict, level: str) -> list:
+    if level == "genus":
+        return limit_records_by_genus(
+            records,
+            max_genera=subset.get("max_labels", subset.get("max_genera")),
+            min_images_per_genus=int(subset.get("min_images_per_label", 1)),
+            max_images_per_genus=subset.get("max_images_per_label"),
+            seed=subset.get("seed"),
+            cover_species=bool(subset.get("cover_species", True)),
+        )
+    if level == "species":
+        return limit_records_by_species(
+            records,
+            max_species=subset.get("max_labels", subset.get("max_species")),
+            min_images_per_species=int(subset.get("min_images_per_label", 1)),
+            max_images_per_species=subset.get("max_images_per_label"),
+            seed=subset.get("seed"),
+        )
+    raise ValueError(f"Unsupported subset level for training: {level}")
+
+
 def _train_static_pairs(config: dict, records: list, stage: str, view: str, model, output: Path) -> None:
     pairs = sample_pairs(
         records=records,
         taxonomic_level=stage,
         positive_count=int(config["pair_sampling"]["positive_per_epoch"][stage]),
         negative_count=int(config["pair_sampling"]["negative_per_epoch"][stage]),
-        hard_negative_ratio=float(config["pair_sampling"].get("hard_negative_ratio", 0.0)),
+        hard_negative_ratio=_stage_float(
+            config["pair_sampling"].get("hard_negative_ratio", 0.0),
+            stage,
+        ),
+        targeted_negative_ratio=_stage_float(
+            config["pair_sampling"].get("targeted_negative_ratio", 0.0),
+            stage,
+        ),
+        targeted_negative_label_pairs=_stage_label_pairs(
+            config["pair_sampling"].get("targeted_negative_label_pairs", []),
+            stage,
+        ),
+        strategy=str(config["pair_sampling"].get("strategy", "label_uniform")),
         seed=int(config["seed"]),
     )
     dataset = PairImageDataset(
@@ -128,6 +194,7 @@ def _train_static_pairs(config: dict, records: list, stage: str, view: str, mode
         view=view,
         image_size=int(config["views"][view]["image_size"]),
         crop_size=int(config["views"].get("local", {}).get("crop_size", 32)),
+        crop_position=_local_crop_position(config),
         preprocessing=_preprocessing_enabled(config),
     )
     dataloader = DataLoader(
@@ -147,24 +214,45 @@ def _train_static_pairs(config: dict, records: list, stage: str, view: str, mode
         lr_decay_gamma=float(config["training"].get("lr_decay_gamma", 0.5)),
         max_iterations=_optional_int(config["training"].get("max_iterations")),
         progress_every=int(config["training"].get("progress_every_batches", 5)),
+        checkpoint_every_epochs=_stage_int(
+            config["training"].get("checkpoint_every_epochs", 0),
+            stage,
+        ),
     )
 
 
-def _build_eval_fn(config: dict, records: list, stage: str):
+def _build_eval_fn(config: dict, records: list, train_records: list, stage: str):
     evaluation_config = config.get("evaluation", {})
     if stage != "genus" or not evaluation_config.get("enabled", False):
         return None
 
-    references, queries = prepare_genus_eval_records(
-        records=filter_records_by_split(records, evaluation_config.get("split", "val")),
-        max_species=evaluation_config.get("max_species"),
-        references_per_genus=int(evaluation_config.get("references_per_genus", 2)),
-        queries_per_genus=int(evaluation_config.get("queries_per_genus", 2)),
-    )
+    eval_source = str(evaluation_config.get("source", "split"))
+    if eval_source == "train_subset":
+        eval_records = train_records
+        references, queries = prepare_genus_eval_records(
+            records=eval_records,
+            max_species=evaluation_config.get("max_species"),
+            references_per_genus=int(evaluation_config.get("references_per_genus", 2)),
+            queries_per_genus=int(evaluation_config.get("queries_per_genus", 2)),
+        )
+    elif eval_source == "train_holdout":
+        references, queries = _prepare_train_holdout_genus_eval_records(
+            records=records,
+            train_records=train_records,
+            evaluation_config=evaluation_config,
+        )
+    else:
+        eval_records = filter_records_by_split(records, evaluation_config.get("split", "val"))
+        references, queries = prepare_genus_eval_records(
+            records=eval_records,
+            max_species=evaluation_config.get("max_species"),
+            references_per_genus=int(evaluation_config.get("references_per_genus", 2)),
+            queries_per_genus=int(evaluation_config.get("queries_per_genus", 2)),
+        )
     if not references or not queries:
         print(
             "genus eval skipped: not enough records to create references and queries "
-            f"for split={evaluation_config.get('split', 'val')}",
+            f"for source={eval_source} split={evaluation_config.get('split', 'val')}",
             flush=True,
         )
         return None
@@ -175,7 +263,7 @@ def _build_eval_fn(config: dict, records: list, stage: str):
     crop_size = int(config["views"]["local"]["crop_size"])
     preprocessing = _preprocessing_enabled(config)
     print(
-        f"genus eval enabled: references={len(references)} "
+        f"genus eval enabled: source={eval_source} references={len(references)} "
         f"queries={len(queries)} top_k={top_ks} score_mode={score_mode}",
         flush=True,
     )
@@ -196,15 +284,102 @@ def _build_eval_fn(config: dict, records: list, stage: str):
     return eval_fn
 
 
+def _prepare_train_holdout_genus_eval_records(
+    records: list[ImageRecord],
+    train_records: list[ImageRecord],
+    evaluation_config: dict,
+) -> tuple[list[ImageRecord], list[ImageRecord]]:
+    reference_seed = _optional_int(
+        evaluation_config.get("reference_seed", evaluation_config.get("seed"))
+    )
+    query_seed = _optional_int(
+        evaluation_config.get("query_seed", evaluation_config.get("seed"))
+    )
+    references_per_genus = int(evaluation_config.get("references_per_genus", 6))
+    queries_per_genus = int(evaluation_config.get("queries_per_genus", 5))
+
+    split_records = filter_records_by_split(records, evaluation_config.get("split", "train"))
+    train_keys = {_record_key(record) for record in train_records}
+    train_species = {record.species for record in train_records}
+
+    references = select_genus_references(
+        train_records,
+        references_per_genus=references_per_genus,
+        seed=reference_seed,
+    )
+    reference_genera = {record.genus for record in references}
+    query_pool = [
+        record
+        for record in split_records
+        if record.species in train_species
+        and record.genus in reference_genera
+        and _record_key(record) not in train_keys
+    ]
+    queries = select_genus_references(
+        query_pool,
+        references_per_genus=queries_per_genus,
+        seed=query_seed,
+    )
+    return references, queries
+
+
+def _record_key(record: ImageRecord) -> str:
+    return str(record.image_path.resolve())
+
+
 def _parse_top_ks(value) -> tuple[int, ...]:
     if isinstance(value, int):
         return (value,)
     return tuple(int(item) for item in value)
 
 
+def _stage_float(value, stage: str, default: float = 0.0) -> float:
+    if value in (None, ""):
+        return default
+    if isinstance(value, dict):
+        if stage in value:
+            return float(value[stage])
+        if "default" in value:
+            return float(value["default"])
+        return default
+    return float(value)
+
+
+def _stage_int(value, stage: str, default: int = 0) -> int:
+    if value in (None, ""):
+        return default
+    if isinstance(value, dict):
+        if stage in value:
+            return int(value[stage])
+        if "default" in value:
+            return int(value["default"])
+        return default
+    return int(value)
+
+
+def _stage_label_pairs(value, stage: str) -> list[tuple[str, str]]:
+    if value in (None, ""):
+        return []
+    if isinstance(value, dict):
+        value = value.get(stage, value.get("default", []))
+    if not value:
+        return []
+
+    pairs: list[tuple[str, str]] = []
+    for item in value:
+        if len(item) != 2:
+            raise ValueError(f"Expected two labels in targeted negative pair, got: {item}")
+        pairs.append((str(item[0]), str(item[1])))
+    return pairs
+
+
 def _preprocessing_enabled(config: dict) -> bool:
     preprocessing = config.get("preprocessing", {})
     return bool(preprocessing.get("enabled", preprocessing.get("leaf_bbox", False)))
+
+
+def _local_crop_position(config: dict) -> str:
+    return str(config.get("views", {}).get("local", {}).get("crop_position", "center"))
 
 
 def _optional_int(value) -> int | None:

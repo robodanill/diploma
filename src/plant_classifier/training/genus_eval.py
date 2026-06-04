@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import torch
+import torch.nn.functional as F
 from PIL import Image
 
 from plant_classifier.data import ImageRecord, limit_records_by_species
@@ -20,6 +21,7 @@ class GenusEvalResult:
     references: int
     top_ks: tuple[int, ...]
     score_mode: str = "comparator"
+    pair_loss: float | None = None
 
     @property
     def primary_top_k(self) -> int:
@@ -168,14 +170,26 @@ def evaluate_genus_retrieval(
     ]
 
     hits = {top_k: 0 for top_k in top_ks}
+    pair_loss_sum = 0.0
+    pair_loss_count = 0
     for query in queries:
         query_embedding = embed_image(model, query.image_path, transform, device)
-        ranked = rank_references(
-            model,
-            query_embedding,
-            reference_embeddings,
-            score_mode=score_mode,
-        )
+        ranked = []
+        for reference, reference_embedding in reference_embeddings:
+            distance = torch.abs(query_embedding - reference_embedding)
+            comparator_score = model.comparator(distance).flatten()
+            target_value = 1.0 if query.genus == reference.genus else 0.0
+            target = torch.full_like(comparator_score, target_value)
+            pair_loss_sum += float(
+                F.binary_cross_entropy(comparator_score, target, reduction="sum").item()
+            )
+            pair_loss_count += int(target.numel())
+            if score_mode == "comparator":
+                score = float(comparator_score.item())
+            else:
+                score = float(distance.sum().item())
+            ranked.append((reference, score))
+        ranked = sorted(ranked, key=lambda item: item[1], reverse=score_mode == "comparator")
         top_genera = [record.genus for record, _ in ranked[:max_top_k]]
         for top_k in top_ks:
             if query.genus in top_genera[:top_k]:
@@ -191,6 +205,7 @@ def evaluate_genus_retrieval(
         references=len(references),
         top_ks=top_ks,
         score_mode=score_mode,
+        pair_loss=pair_loss_sum / max(1, pair_loss_count),
     )
 
 
@@ -198,12 +213,51 @@ def describe_genus_distribution(records: list[ImageRecord], limit: int = 10) -> 
     return dict(Counter(record.genus for record in records).most_common(limit))
 
 
+def describe_species_per_genus(records: list[ImageRecord], limit: int = 10) -> dict[str, int]:
+    species_by_genus: dict[str, set[str]] = defaultdict(set)
+    for record in records:
+        species_by_genus[record.genus].add(record.species)
+    ranked = sorted(
+        species_by_genus.items(),
+        key=lambda item: (-len(item[1]), item[0]),
+    )
+    return {genus: len(species) for genus, species in ranked[:limit]}
+
+
+def describe_genus_reference_coverage(
+    reference_pool: list[ImageRecord],
+    references: list[ImageRecord],
+    limit: int = 10,
+) -> dict[str, str]:
+    pool_species_by_genus: dict[str, set[str]] = defaultdict(set)
+    reference_species_by_genus: dict[str, set[str]] = defaultdict(set)
+    for record in reference_pool:
+        pool_species_by_genus[record.genus].add(record.species)
+    for record in references:
+        reference_species_by_genus[record.genus].add(record.species)
+
+    ranked = sorted(
+        pool_species_by_genus,
+        key=lambda genus: (
+            len(reference_species_by_genus[genus]) / max(1, len(pool_species_by_genus[genus])),
+            -len(pool_species_by_genus[genus]),
+            genus,
+        ),
+    )
+    return {
+        genus: f"{len(reference_species_by_genus[genus])}/{len(pool_species_by_genus[genus])}"
+        for genus in ranked[:limit]
+    }
+
+
+@torch.inference_mode()
 def embed_image(model, image_path: Path, transform, device: torch.device):
     with Image.open(image_path) as image:
         tensor = transform(image.convert("RGB")).unsqueeze(0).to(device)
     return model.embed(tensor)
 
 
+@torch.inference_mode()
 def rank_references(model, query_embedding, reference_embeddings, score_mode: str = "comparator"):
     _validate_score_mode(score_mode)
     ranked = []

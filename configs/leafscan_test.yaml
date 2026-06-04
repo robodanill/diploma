@@ -1,0 +1,16 @@
+dataset:
+  name: PlantCLEF2015LeafScanTest
+  root: data/plantclef2015/test_leafscan/leafscan
+  metadata: data/plantclef2015/test_leafscan_metadata.csv
+  image_column: image_path
+  family_column: family
+  genus_column: genus
+  species_column: species
+
+views:
+  global:
+    image_size: 224
+  local:
+    image_size: 224
+    crop_size: 32
+    crop_position: center

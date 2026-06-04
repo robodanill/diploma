@@ -19,7 +19,23 @@ class SpeciesEvalResult:
     mean_inverse_rank: float
     queries: int
     references: int
+    genus_references: int
+    plantclef_s: float
     top_ks: tuple[int, ...]
+    items: tuple["SpeciesEvalItem", ...]
+
+
+@dataclass(frozen=True)
+class SpeciesEvalItem:
+    image_path: str
+    expected_family: str
+    expected_genus: str
+    expected_species: str
+    predicted_family: str
+    predicted_genus: str
+    predicted_species: str
+    predicted_score: float
+    rank: int | None
 
 
 def select_species_references(
@@ -48,6 +64,7 @@ def build_reference_embeddings(
     crop_size: int,
     preprocessing: bool,
     device: torch.device,
+    crop_position: str = "center",
 ) -> list[ReferenceEmbedding]:
     global_transform = build_image_transform(
         "global",
@@ -59,6 +76,7 @@ def build_reference_embeddings(
         "local",
         image_size=image_size,
         crop_size=crop_size,
+        crop_position=crop_position,
         preprocessing=preprocessing,
     )
 
@@ -85,14 +103,17 @@ def evaluate_species_retrieval(
     predictor: TwoStageSiamesePredictor,
     queries: list[ImageRecord],
     top_ks: tuple[int, ...],
+    ranking_limit: int | None = None,
 ) -> SpeciesEvalResult:
     top_ks = tuple(sorted(set(top_ks)))
     max_top_k = max(top_ks)
+    prediction_limit = max_top_k if ranking_limit is None else max(max_top_k, ranking_limit)
     hits = {top_k: 0 for top_k in top_ks}
     inverse_rank_sum = 0.0
+    items: list[SpeciesEvalItem] = []
 
     for query in queries:
-        prediction = predictor.predict_many([query.image_path], top_k=max_top_k)[0]
+        prediction = predictor.predict_many([query.image_path], top_k=prediction_limit)[0]
         ranked_species = [label.species for label in prediction.labels]
         rank = _rank_of(query.species, ranked_species)
         if rank is not None:
@@ -100,15 +121,33 @@ def evaluate_species_retrieval(
         for top_k in top_ks:
             if rank is not None and rank <= top_k:
                 hits[top_k] += 1
+        top_label = prediction.top_label
+        items.append(
+            SpeciesEvalItem(
+                image_path=str(query.image_path),
+                expected_family=query.family,
+                expected_genus=query.genus,
+                expected_species=query.species,
+                predicted_family=top_label.family if top_label else "",
+                predicted_genus=top_label.genus if top_label else "",
+                predicted_species=top_label.species if top_label else "",
+                predicted_score=top_label.score if top_label else 0.0,
+                rank=rank,
+            )
+        )
 
     query_count = len(queries)
+    plantclef_s = inverse_rank_sum / query_count
     return SpeciesEvalResult(
         accuracies={top_k: hits[top_k] / query_count for top_k in top_ks},
         hits=hits,
-        mean_inverse_rank=inverse_rank_sum / query_count,
+        mean_inverse_rank=plantclef_s,
         queries=query_count,
         references=len(predictor.references),
+        genus_references=len(predictor.genus_references),
+        plantclef_s=plantclef_s,
         top_ks=top_ks,
+        items=tuple(items),
     )
 
 

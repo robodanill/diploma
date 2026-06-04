@@ -9,6 +9,7 @@ pytest.importorskip("torch")
 import torch
 
 from plant_classifier.training.genus_eval import rank_references, select_reference_records
+from plant_classifier.training.cli import _prepare_train_holdout_genus_eval_records
 
 
 def test_select_genus_references_balances_species_inside_genus() -> None:
@@ -91,3 +92,44 @@ def test_rank_references_can_use_raw_l1_distance() -> None:
 
     assert comparator_ranked[0][0] == far
     assert l1_ranked[0][0] == close
+
+
+def test_train_holdout_genus_eval_uses_untrained_images_from_same_species() -> None:
+    records = [
+        ImageRecord(Path(f"acer_a{index}.jpg"), "F", "Acer", "Acer alpha", "train")
+        for index in range(4)
+    ] + [
+        ImageRecord(Path(f"acer_b{index}.jpg"), "F", "Acer", "Acer beta", "train")
+        for index in range(4)
+    ] + [
+        ImageRecord(Path(f"prunus_a{index}.jpg"), "F", "Prunus", "Prunus alpha", "train")
+        for index in range(4)
+    ] + [
+        ImageRecord(Path(f"ignored_{index}.jpg"), "F", "Ignored", "Ignored alpha", "train")
+        for index in range(4)
+    ]
+    train_records = [
+        record
+        for record in records
+        if record.genus in {"Acer", "Prunus"}
+        and record.image_path.name.endswith(("0.jpg", "1.jpg"))
+    ]
+
+    references, queries = _prepare_train_holdout_genus_eval_records(
+        records=records,
+        train_records=train_records,
+        evaluation_config={
+            "split": "train",
+            "references_per_genus": 2,
+            "queries_per_genus": 2,
+            "seed": 5,
+        },
+    )
+
+    train_paths = {record.image_path for record in train_records}
+    assert {record.genus for record in references} == {"Acer", "Prunus"}
+    assert {record.genus for record in queries} == {"Acer", "Prunus"}
+    assert all(record.image_path not in train_paths for record in queries)
+    assert {record.species for record in queries}.issubset(
+        {record.species for record in train_records}
+    )
