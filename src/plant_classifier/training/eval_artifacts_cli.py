@@ -68,7 +68,8 @@ def main() -> int:
         f"species_score_mode={artifacts.species_score_mode} "
         f"species_aggregation={artifacts.species_aggregation} "
         f"genus_candidate_mode={artifacts.genus_candidate_mode} "
-        f"genus_weight_mode={artifacts.genus_weight_mode}"
+        f"genus_weight_mode={artifacts.genus_weight_mode} "
+        f"confidence_temperature={artifacts.confidence_temperature}"
     )
     for top_k in result.top_ks:
         print(

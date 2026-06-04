@@ -30,6 +30,7 @@ class ModelArtifacts:
     species_aggregation: str = "max"
     genus_candidate_mode: str = "unique"
     genus_weight_mode: str = "score"
+    confidence_temperature: float = 2.0
     require_two_stage_reference_index: bool = True
 
 
@@ -57,6 +58,7 @@ def create_predictor(artifacts: ModelArtifacts | None = None) -> Predictor:
         species_aggregation=resolved_artifacts.species_aggregation,
         genus_candidate_mode=resolved_artifacts.genus_candidate_mode,
         genus_weight_mode=resolved_artifacts.genus_weight_mode,
+        confidence_temperature=resolved_artifacts.confidence_temperature,
         require_two_stage_reference_index=resolved_artifacts.require_two_stage_reference_index,
     )
 
@@ -80,6 +82,7 @@ def artifacts_from_environment() -> ModelArtifacts | None:
         species_aggregation=os.getenv("PLANT_CLASSIFIER_SPECIES_AGGREGATION", "max"),
         genus_candidate_mode=os.getenv("PLANT_CLASSIFIER_GENUS_CANDIDATE_MODE", "unique"),
         genus_weight_mode=os.getenv("PLANT_CLASSIFIER_GENUS_WEIGHT_MODE", "score"),
+        confidence_temperature=float(os.getenv("PLANT_CLASSIFIER_CONFIDENCE_TEMPERATURE", "2.0")),
         require_two_stage_reference_index=_env_flag(
             "PLANT_CLASSIFIER_REQUIRE_TWO_STAGE_REFERENCE_INDEX",
             default=True,

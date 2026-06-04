@@ -162,7 +162,10 @@ class ResultCard(QFrame):
         if top is None:
             result_text = prediction.error or ""
         else:
-            result_text = f"{top.display_name}\nВероятность: {top.score:.3f}"
+            result_text = (
+                f"{top.display_name}\n"
+                f"Нормированная уверенность: {format_confidence(top.score)}"
+            )
         if correctness is not None and not correctness.is_correct:
             result_text += f"\nПравильно: {correctness.ground_truth.display_name}"
         result = QLabel(result_text)
@@ -866,7 +869,7 @@ class MainWindow(QMainWindow):
             for rank, label in enumerate(prediction.labels, start=1):
                 lines.append(
                     f"{rank}. {label.display_name} | "
-                    f"вероятность: {label.score:.3f}"
+                    f"нормированная уверенность: {format_confidence(label.score)}"
                 )
         if correctness is not None:
             correctness_text = "верно" if correctness.is_correct else "неверно"
@@ -885,7 +888,7 @@ class MainWindow(QMainWindow):
     def _render_genus_options(self, prediction: ImagePrediction) -> None:
         labels = prediction.genus_labels or aggregate_genus_labels(prediction.labels)
         lines = [
-            f"{rank}. {label.genus} | вероятность: {label.score:.3f}"
+            f"{rank}. {label.genus} | нормированная уверенность: {format_confidence(label.score)}"
             for rank, label in enumerate(labels[:30], start=1)
         ]
         self.genus_list.setPlainText("\n".join(lines))
@@ -1016,6 +1019,12 @@ def canonical_binomial(genus: str, species: str) -> str:
     display = species if species.lower().startswith(genus.lower()) else f"{genus} {species}"
     tokens = re.sub(r"[^0-9a-z]+", " ", display.lower()).split()
     return " ".join(tokens[:2])
+
+
+def format_confidence(score: float) -> str:
+    if 0 < score < 0.001:
+        return "<0.001"
+    return f"{score:.3f}"
 
 
 def model_artifact_summary(artifacts: ModelArtifacts) -> str:

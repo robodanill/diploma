@@ -24,6 +24,7 @@ def test_model_artifacts_defaults_match_final_paper60_inference_profile(tmp_path
     assert artifacts.species_aggregation == "max"
     assert artifacts.genus_candidate_mode == "unique"
     assert artifacts.genus_weight_mode == "score"
+    assert artifacts.confidence_temperature == 2.0
     assert artifacts.require_two_stage_reference_index is True
 
 
@@ -44,6 +45,7 @@ def test_environment_artifacts_use_final_paper60_profile_by_default(
     assert artifacts.species_score_mode == "l1"
     assert artifacts.genus_candidate_mode == "unique"
     assert artifacts.genus_weight_mode == "score"
+    assert artifacts.confidence_temperature == 2.0
     assert artifacts.require_two_stage_reference_index is True
 
 

@@ -47,6 +47,12 @@ species checkpoint, and reference index must be three different files. The index
 must contain separate genus and species reference sets in the current two-stage
 index format.
 
+Displayed confidence values are a deterministic, rank-preserving normalization of
+the model's relative similarity scores. They sum to one across the considered
+candidates, but they are not statistically calibrated probabilities and do not
+change the predicted class or evaluation accuracy. The display temperature can be
+overridden with `PLANT_CLASSIFIER_CONFIDENCE_TEMPERATURE`.
+
 The `final_scnn_*` checkpoints were adapted with the upper-bound `adapt` split and
 must be paired with `final_reference_index_adapt_vgg16.pt`. The older
 `final_reference_index_paper60_vgg16.pt` uses different references and is not a

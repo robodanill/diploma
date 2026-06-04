@@ -9,6 +9,7 @@ import torch
 from PIL import Image
 from torch import Tensor
 
+from plant_classifier.inference.confidence import normalize_confidences
 from plant_classifier.inference.types import ImagePrediction, PredictionLabel
 from plant_classifier.models.siamese import BackboneSpec, SiameseNetwork, build_siamese_network
 from plant_classifier.training.image_pairs import build_image_transform
@@ -44,6 +45,7 @@ class TwoStageSiamesePredictor:
         species_aggregation: str = "max",
         genus_candidate_mode: str = "reference",
         genus_weight_mode: str = "frequency",
+        confidence_temperature: float = 2.0,
         device: str | None = None,
     ) -> None:
         _validate_score_mode(genus_score_mode)
@@ -51,6 +53,8 @@ class TwoStageSiamesePredictor:
         _validate_species_aggregation(species_aggregation)
         _validate_genus_candidate_mode(genus_candidate_mode)
         _validate_genus_weight_mode(genus_weight_mode)
+        if confidence_temperature <= 0:
+            raise ValueError("Confidence temperature must be greater than zero")
         self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
         self.genus_model = genus_model.to(self.device).eval()
         self.species_model = species_model.to(self.device).eval()
@@ -64,6 +68,7 @@ class TwoStageSiamesePredictor:
         self.species_aggregation = species_aggregation
         self.genus_candidate_mode = genus_candidate_mode
         self.genus_weight_mode = genus_weight_mode
+        self.confidence_temperature = confidence_temperature
         self.global_transform = build_image_transform(
             "global",
             image_size=image_size,
@@ -128,7 +133,11 @@ class TwoStageSiamesePredictor:
                 weight_mode=self.genus_weight_mode,
             )
             candidate_genera = set(genus_weights)
-            genus_labels = self._genus_labels(genus_scores, limit=self.genus_candidates)
+            genus_labels = self._genus_labels(
+                genus_scores,
+                limit=self.genus_candidates,
+                confidence_temperature=self.confidence_temperature,
+            )
 
             species_reference_scores: dict[tuple[str, str, str], list[float]] = {}
             for reference in self.species_references:
@@ -152,10 +161,19 @@ class TwoStageSiamesePredictor:
                 )
                 for key, scores in species_reference_scores.items()
             }
+            species_confidences = normalize_confidences(
+                species_scores,
+                temperature=self.confidence_temperature,
+            )
 
             labels = [
-                PredictionLabel(family=family, genus=genus, species=species, score=score)
-                for (family, genus, species), score in sorted(
+                PredictionLabel(
+                    family=family,
+                    genus=genus,
+                    species=species,
+                    score=species_confidences[(family, genus, species)],
+                )
+                for (family, genus, species), _score in sorted(
                     species_scores.items(),
                     key=lambda item: item[1],
                     reverse=True,
@@ -188,16 +206,21 @@ class TwoStageSiamesePredictor:
     def _genus_labels(
         genus_scores: list[tuple[ReferenceEmbedding, float]],
         limit: int,
+        confidence_temperature: float,
     ) -> list[PredictionLabel]:
         ranked: dict[str, tuple[str, float]] = {}
         for reference, score in genus_scores:
             current = ranked.get(reference.genus)
             if current is None or score > current[1]:
                 ranked[reference.genus] = (reference.family, score)
+        confidences = normalize_confidences(
+            {genus: score for genus, (_family, score) in ranked.items()},
+            temperature=confidence_temperature,
+        )
 
         return [
-            PredictionLabel(family=family, genus=genus, species="", score=score)
-            for genus, (family, score) in sorted(
+            PredictionLabel(family=family, genus=genus, species="", score=confidences[genus])
+            for genus, (family, _score) in sorted(
                 ranked.items(),
                 key=lambda item: item[1][1],
                 reverse=True,
