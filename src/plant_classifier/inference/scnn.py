@@ -9,7 +9,7 @@ import torch
 from PIL import Image
 from torch import Tensor
 
-from plant_classifier.inference.types import ImagePrediction, PredictionLabel
+from plant_classifier.inference.types import ImagePrediction, PredictionLabel, normalize_label_scores
 from plant_classifier.models.siamese import BackboneSpec, SiameseNetwork, build_siamese_network
 from plant_classifier.training.image_pairs import build_image_transform
 
@@ -128,7 +128,9 @@ class TwoStageSiamesePredictor:
                 weight_mode=self.genus_weight_mode,
             )
             candidate_genera = set(genus_weights)
-            genus_labels = self._genus_labels(genus_scores, limit=self.genus_candidates)
+            genus_labels = normalize_label_scores(
+                self._genus_labels(genus_scores, limit=self.genus_candidates)
+            )
 
             species_reference_scores: dict[tuple[str, str, str], list[float]] = {}
             for reference in self.species_references:
@@ -153,18 +155,18 @@ class TwoStageSiamesePredictor:
                 for key, scores in species_reference_scores.items()
             }
 
-            labels = [
+            labels = normalize_label_scores([
                 PredictionLabel(family=family, genus=genus, species=species, score=score)
                 for (family, genus, species), score in sorted(
                     species_scores.items(),
                     key=lambda item: item[1],
                     reverse=True,
                 )[:top_k]
-            ]
+            ])
             return ImagePrediction(
                 image_path=image_path,
-                labels=tuple(labels),
-                genus_labels=tuple(genus_labels),
+                labels=labels,
+                genus_labels=genus_labels,
             )
         except Exception as exc:  # pragma: no cover - inference boundary
             return ImagePrediction(image_path=image_path, labels=(), error=str(exc))

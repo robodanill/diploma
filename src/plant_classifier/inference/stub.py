@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-from plant_classifier.inference.types import ImagePrediction, PredictionLabel
+from plant_classifier.inference.types import ImagePrediction, PredictionLabel, normalize_label_scores
 
 
 class StubPredictor:
@@ -60,8 +60,11 @@ class StubPredictor:
                 )
             )
 
+        labels = normalize_label_scores(labels)
+        genus_labels = normalize_label_scores(genus_labels)
+
         return ImagePrediction(
             image_path=image_path,
-            labels=tuple(labels),
-            genus_labels=tuple(genus_labels),
+            labels=labels,
+            genus_labels=genus_labels,
         )
